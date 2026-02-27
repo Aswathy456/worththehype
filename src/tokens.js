@@ -15,6 +15,7 @@ export const T = {
   ink:       "#f2ede6",       // primary text — warm cream
   inkMid:    "#a8998a",       // secondary
   inkLow:    "#5e5248",       // tertiary / labels
+  inkFaint:  "#3a3330",       // ← ADDED: very subtle, used for dividers & ghost text
 
   // Accent — crimson
   accent:    "#c1392b",

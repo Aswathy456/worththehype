@@ -4,7 +4,7 @@ import Home from "./pages/Home";
 import RestaurantDetail from "./pages/RestaurantDetail";
 import AddReview from "./pages/AddReview";
 import { Login, Signup, ForgotPassword } from "./pages/AuthPages";
-
+import Profile from "./pages/Profile";
 function App() {
   return (
     <BrowserRouter>
@@ -16,6 +16,7 @@ function App() {
           <Route path="/"                 element={<Home />} />
           <Route path="/restaurant/:id"   element={<RestaurantDetail />} />
           <Route path="/restaurant/:id/review" element={<AddReview />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </RestaurantProvider>
     </BrowserRouter>
