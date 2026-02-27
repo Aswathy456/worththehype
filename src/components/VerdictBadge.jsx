@@ -1,40 +1,32 @@
-function VerdictBadge({ hypeScore, realityScore }) {
+import { T } from "../tokens";
+
+export default function VerdictBadge({ hypeScore, realityScore, large = false }) {
   const delta = realityScore - hypeScore;
 
+  let label, color, bg, symbol;
   if (delta >= 1) {
-    return <span style={styles.worthy}>✅ Worth the Hype</span>;
+    label = "Worth the Hype"; color = T.worthy; bg = T.worthyBg; symbol = "✦";
   } else if (delta >= -1) {
-    return <span style={styles.fair}>😐 About What You'd Expect</span>;
+    label = "As Expected"; color = T.hype; bg = T.hypeBg; symbol = "◈";
   } else {
-    return <span style={styles.overhyped}>⚠️ Overhyped</span>;
+    label = "Overhyped"; color = T.over; bg = T.overBg; symbol = "▽";
   }
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      background: bg,
+      border: `1px solid ${color}30`,
+      color, borderRadius: 4,
+      padding: large ? "5px 12px" : "3px 9px",
+      fontSize: large ? 13 : 11,
+      fontWeight: 600,
+      fontFamily: T.fontBody,
+      letterSpacing: "0.04em",
+      textTransform: "uppercase",
+    }}>
+      <span style={{ fontSize: large ? 10 : 8 }}>{symbol}</span>
+      {label}
+    </span>
+  );
 }
-
-const styles = {
-  worthy: {
-    background: "#d1fae5",
-    color: "#065f46",
-    padding: "4px 10px",
-    borderRadius: 20,
-    fontWeight: 700,
-    fontSize: 13,
-  },
-  fair: {
-    background: "#fef9c3",
-    color: "#854d0e",
-    padding: "4px 10px",
-    borderRadius: 20,
-    fontWeight: 700,
-    fontSize: 13,
-  },
-  overhyped: {
-    background: "#fee2e2",
-    color: "#991b1b",
-    padding: "4px 10px",
-    borderRadius: 20,
-    fontWeight: 700,
-    fontSize: 13,
-  },
-};
-
-export default VerdictBadge;

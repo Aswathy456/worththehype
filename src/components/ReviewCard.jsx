@@ -1,119 +1,81 @@
-function ReviewCard({ review }) {
+import { T } from "../tokens";
+
+const repColors = {
+  New:     { color: T.inkLow,  bg: T.bgRaised },
+  Regular: { color: "#4a7c8a", bg: "rgba(74,124,138,0.12)" },
+  Veteran: { color: "#c17c2b", bg: "rgba(193,124,43,0.12)" },
+};
+
+export default function ReviewCard({ review }) {
   const { user, accountAgeDays, reputation, hypeGiven, realityGiven, text, upvotes, date } = review;
+  const { color, bg } = repColors[reputation] || repColors.New;
+  const delta = realityGiven - hypeGiven;
 
-  const reputationColor = {
-    New: "#9ca3af",
-    Regular: "#3b82f6",
-    Veteran: "#f59e0b",
-  };
-
-  const accountAgeLabel =
-    accountAgeDays < 30
-      ? `${accountAgeDays}d`
-      : accountAgeDays < 365
-      ? `${Math.floor(accountAgeDays / 30)}mo`
-      : `${Math.floor(accountAgeDays / 365)}yr`;
+  const ageLabel = accountAgeDays < 30
+    ? `${accountAgeDays}d`
+    : accountAgeDays < 365
+    ? `${Math.floor(accountAgeDays / 30)}mo`
+    : `${(accountAgeDays / 365).toFixed(1)}yr`;
 
   return (
-    <div style={styles.card}>
-      {/* User info row */}
-      <div style={styles.userRow}>
-        <div style={{ ...styles.avatar, background: reputationColor[reputation] }}>
-          {user[0].toUpperCase()}
+    <div style={{
+      border: `1px solid ${T.border}`,
+      borderRadius: 8, padding: "20px 22px",
+      background: T.bgCard,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: "50%",
+            background: T.bgRaised, border: `1px solid ${T.borderMid}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 12, fontWeight: 700, color: T.inkMid,
+          }}>
+            {user[0].toUpperCase()}
+          </div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>u/{user}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: "0.07em",
+                textTransform: "uppercase", color, background: bg,
+                padding: "2px 7px", borderRadius: 3,
+              }}>{reputation}</span>
+            </div>
+            <p style={{ fontSize: 11, color: T.inkLow, marginTop: 1 }}>
+              {ageLabel} account · {date}
+            </p>
+          </div>
         </div>
-        <div>
-          <div style={styles.username}>
-            u/{user}
-            <span style={{ ...styles.repBadge, color: reputationColor[reputation] }}>
-              {reputation}
-            </span>
-          </div>
-          <div style={styles.meta}>
-            🕐 Account age: {accountAgeLabel} · {date}
-          </div>
+        <div style={{ display: "flex", gap: 16 }}>
+          {[["Hype", hypeGiven, T.hype], ["Reality", realityGiven, delta >= 0 ? T.worthy : T.accent]].map(([label, score, color]) => (
+            <div key={label} style={{ textAlign: "right" }}>
+              <p style={{ fontSize: 9, color: T.inkLow, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</p>
+              <p style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{score}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Review text */}
-      <p style={styles.text}>{text}</p>
+      <p style={{
+        fontFamily: T.fontDisplay, fontSize: 16, fontStyle: "italic",
+        color: T.inkMid, lineHeight: 1.75,
+        borderLeft: `2px solid ${T.border}`,
+        paddingLeft: 14, marginBottom: 14,
+      }}>
+        "{text}"
+      </p>
 
-      {/* Scores + upvotes */}
-      <div style={styles.footer}>
-        <span style={styles.score}>Hype: {hypeGiven} · Reality: {realityGiven}</span>
-        <span style={styles.upvotes}>▲ {upvotes}</span>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button style={{
+          background: "none", border: `1px solid ${T.border}`,
+          borderRadius: 4, padding: "4px 12px",
+          fontSize: 12, color: T.inkLow,
+          display: "flex", alignItems: "center", gap: 5,
+        }}>
+          ▲ <span style={{ fontWeight: 600 }}>{upvotes}</span>
+        </button>
       </div>
     </div>
   );
 }
-
-const styles = {
-  card: {
-    background: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    borderRadius: 10,
-    padding: "14px 16px",
-    marginBottom: 12,
-  },
-  userRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
-  },
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: "50%",
-    color: "#fff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 700,
-    fontSize: 14,
-    flexShrink: 0,
-  },
-  username: {
-    fontWeight: 700,
-    fontSize: 13,
-    color: "#111",
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-  },
-  repBadge: {
-    fontSize: 11,
-    fontWeight: 600,
-    background: "#f3f4f6",
-    padding: "2px 7px",
-    borderRadius: 20,
-  },
-  meta: {
-    fontSize: 11,
-    color: "#9ca3af",
-    marginTop: 2,
-  },
-  text: {
-    margin: "0 0 10px",
-    fontSize: 14,
-    color: "#374151",
-    lineHeight: 1.6,
-  },
-  footer: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  score: {
-    fontSize: 12,
-    color: "#6b7280",
-    fontWeight: 600,
-  },
-  upvotes: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#4f46e5",
-    cursor: "pointer",
-  },
-};
-
-export default ReviewCard;

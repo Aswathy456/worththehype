@@ -1,77 +1,102 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import HypeGauge from "./HypeGauge";
 import VerdictBadge from "./VerdictBadge";
+import { T } from "../tokens";
 
-function RestaurantCard({ restaurant }) {
+export default function RestaurantCard({ restaurant, index }) {
   const { id, name, city, neighborhood, cuisine, hypeScore, realityScore, reviews } = restaurant;
   const navigate = useNavigate();
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <div style={styles.card} onClick={() => navigate(`/restaurant/${id}`)}>
-      <div style={styles.header}>
-        <div>
-          <h3 style={styles.name}>{name}</h3>
-          <span style={styles.meta}>📍 {neighborhood}, {city} · {cuisine}</span>
-        </div>
-        <VerdictBadge hypeScore={hypeScore} realityScore={realityScore} />
-      </div>
-
-      <HypeGauge hypeScore={hypeScore} realityScore={realityScore} />
-
-      <div style={styles.footer}>
-        <span style={styles.reviews}>💬 {reviews} reviews</span>
-        <span style={styles.delta}>
-          Delta: {(realityScore - hypeScore) >= 0 ? "+" : ""}
-          {(realityScore - hypeScore).toFixed(1)}
+    <>
+      <style>{`
+        .rcard-${id}:hover { border-color: ${T.borderMid} !important; }
+      `}</style>
+      <article
+        className={`rcard-${id}`}
+        onClick={() => navigate(`/restaurant/${id}`)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          background: hovered ? T.bgRaised : T.bgCard,
+          border: `1px solid ${T.border}`,
+          borderRadius: 8,
+          padding: "24px",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        {/* Issue number watermark */}
+        <span style={{
+          position: "absolute", top: 16, right: 20,
+          fontFamily: T.fontDisplay,
+          fontSize: 72, fontWeight: 700,
+          color: T.border,
+          lineHeight: 1, userSelect: "none",
+          transition: "color 0.2s",
+        }}>
+          {String(index + 1).padStart(2, "0")}
         </span>
-      </div>
-    </div>
+
+        {/* Header */}
+        <div>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+            <h2 style={{
+              fontFamily: T.fontDisplay,
+              fontSize: 24, fontWeight: 700,
+              color: T.ink, lineHeight: 1.2,
+              letterSpacing: "-0.01em",
+            }}>
+              {name}
+            </h2>
+            <VerdictBadge hypeScore={hypeScore} realityScore={realityScore} />
+          </div>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{
+              fontSize: 11, color: T.inkLow,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              fontWeight: 500,
+            }}>
+              {neighborhood}
+            </span>
+            <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.inkLow, flexShrink: 0 }} />
+            <span style={{
+              fontSize: 11, color: T.inkLow,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              fontWeight: 500,
+            }}>
+              {cuisine}
+            </span>
+          </div>
+        </div>
+
+        {/* Gauge */}
+        <HypeGauge hypeScore={hypeScore} realityScore={realityScore} />
+
+        {/* Footer */}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          paddingTop: 16, borderTop: `1px solid ${T.border}`,
+        }}>
+          <span style={{ fontSize: 12, color: T.inkLow }}>
+            {reviews.toLocaleString()} community reviews
+          </span>
+          <span style={{
+            fontSize: 12, fontWeight: 600, color: T.inkMid,
+            letterSpacing: "0.04em",
+          }}>
+            Read more →
+          </span>
+        </div>
+      </article>
+    </>
   );
 }
-
-const styles = {
-  card: {
-    background: "#fff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: "16px 18px",
-    marginBottom: 16,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-    cursor: "pointer",
-    transition: "box-shadow 0.2s",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 14,
-  },
-  name: {
-    margin: 0,
-    fontSize: 17,
-    fontWeight: 700,
-    color: "#111",
-  },
-  meta: {
-    fontSize: 12,
-    color: "#9ca3af",
-    marginTop: 3,
-    display: "block",
-  },
-  footer: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  reviews: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  delta: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: "#4f46e5",
-  },
-};
-
-export default RestaurantCard;
