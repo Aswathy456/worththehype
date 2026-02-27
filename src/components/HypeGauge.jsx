@@ -3,52 +3,114 @@ import { T } from "../tokens";
 export default function HypeGauge({ hypeScore, realityScore }) {
   const delta = realityScore - hypeScore;
   const deltaPositive = delta >= 0;
+  const deltaColor = deltaPositive ? T.worthy : T.hype;
+
+  const bars = [
+    { label: "HYPE",    score: hypeScore,    color: T.hype,   track: "#2a0e0e" },
+    { label: "REALITY", score: realityScore, color: deltaPositive ? T.worthy : T.accent, track: "#0a1f0a" },
+  ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {[
-        { label: "HYPE", score: hypeScore, color: T.hype, track: "#2a2218" },
-        { label: "REALITY", score: realityScore, color: deltaPositive ? T.worthy : T.accent, track: "#1a201a" },
-      ].map(({ label, score, color, track }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {bars.map(({ label, score, color, track }) => (
         <div key={label}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            marginBottom: 7,
+          }}>
             <span style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: "0.1em",
-              color: T.inkLow, fontFamily: T.fontBody,
-            }}>{label}</span>
+              fontFamily: T.fontBody,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: T.inkLow,
+            }}>
+              {label}
+            </span>
             <span style={{
               fontFamily: T.fontDisplay,
-              fontSize: 18, fontWeight: 700, color,
+              fontSize: 21,
+              fontWeight: 700,
+              color,
               lineHeight: 1,
             }}>
-              {score}<span style={{ fontSize: 11, color: T.inkLow, fontFamily: T.fontBody }}>/10</span>
+              {score.toFixed(1)}
+              <span style={{
+                fontFamily: T.fontBody,
+                fontSize: 10,
+                fontWeight: 400,
+                color: T.inkLow,
+                marginLeft: 2,
+              }}>
+                /10
+              </span>
             </span>
           </div>
+
+          {/* Track */}
           <div style={{
-            height: 3, background: track, borderRadius: 2, overflow: "hidden",
+            height: 4,
+            background: track,
+            borderRadius: 3,
+            overflow: "hidden",
+            position: "relative",
           }}>
             <div style={{
-              height: "100%", width: `${(score / 10) * 100}%`,
-              background: color, borderRadius: 2,
-              transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
+              height: "100%",
+              width: `${(score / 10) * 100}%`,
+              background: `linear-gradient(90deg, ${color}50, ${color})`,
+              borderRadius: 3,
+              transition: "width 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
             }} />
           </div>
         </div>
       ))}
 
-      {/* Delta line */}
+      {/* Delta row */}
       <div style={{
-        display: "flex", justifyContent: "flex-end", alignItems: "center",
-        gap: 6, paddingTop: 4,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingTop: 12,
         borderTop: `1px solid ${T.border}`,
+        marginTop: 2,
       }}>
-        <span style={{ fontSize: 10, color: T.inkLow, letterSpacing: "0.08em", textTransform: "uppercase" }}>Delta</span>
         <span style={{
-          fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 700,
-          color: deltaPositive ? T.worthy : T.accent,
+          fontFamily: T.fontBody,
+          fontSize: 9,
+          fontWeight: 600,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: T.inkLow,
         }}>
-          {deltaPositive ? "+" : ""}{delta.toFixed(1)}
+          Reality vs Hype
         </span>
+
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{
+            fontFamily: T.fontDisplay,
+            fontSize: 20,
+            fontWeight: 700,
+            color: deltaColor,
+            lineHeight: 1,
+          }}>
+            {deltaPositive ? "+" : ""}{delta.toFixed(1)}
+          </span>
+          <span style={{
+            fontFamily: T.fontBody,
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: deltaColor,
+            opacity: 0.7,
+          }}>
+            {deltaPositive ? "underrated" : "overhyped"}
+          </span>
+        </div>
       </div>
     </div>
   );

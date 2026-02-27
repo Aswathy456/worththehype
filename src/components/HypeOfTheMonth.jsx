@@ -1,404 +1,429 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { T } from "../tokens";
 import { calculateHypeOfTheMonth } from "../services/hypeService";
-import { Link } from "react-router-dom";
 
 export default function HypeOfTheMonth({ restaurants, city }) {
   const [hypeData, setHypeData] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
   useEffect(() => {
-    if (restaurants && restaurants.length > 0) {
-      const data = calculateHypeOfTheMonth(restaurants);
-      setHypeData(data);
+    if (restaurants?.length > 0) {
+      setHypeData(calculateHypeOfTheMonth(restaurants));
     }
   }, [restaurants]);
 
   if (!hypeData) return null;
 
   const { restaurant, trendData, hypeScore, momentum } = hypeData;
+  const isRising   = momentum > 0;
+  const trendColor = isRising ? T.worthy : T.hype;
 
-  // Graph dimensions
-  const graphWidth = 480;
-  const graphHeight = 200;
-  const padding = { top: 20, right: 20, bottom: 30, left: 40 };
-  const chartWidth = graphWidth - padding.left - padding.right;
-  const chartHeight = graphHeight - padding.top - padding.bottom;
+  // ── SVG graph dimensions ──────────────────────────────────────────────
+  const gW  = 420;
+  const gH  = 170;
+  const pad = { top: 16, right: 16, bottom: 28, left: 36 };
+  const cW  = gW - pad.left - pad.right;
+  const cH  = gH - pad.top - pad.bottom;
 
-  // Scale functions
-  const maxValue = Math.max(...trendData.map(d => d.value));
-  const minValue = Math.min(...trendData.map(d => d.value));
-  const valueRange = maxValue - minValue || 1;
+  const vals    = trendData.map(d => d.value);
+  const maxV    = Math.max(...vals);
+  const minV    = Math.min(...vals);
+  const vRange  = maxV - minV || 1;
 
-  const xScale = (index) => padding.left + (index / (trendData.length - 1)) * chartWidth;
-  const yScale = (value) => padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
+  const xS = i => pad.left + (i / (trendData.length - 1)) * cW;
+  const yS = v => pad.top + cH - ((v - minV) / vRange) * cH;
 
-  // Create path for line chart
-  const linePath = trendData.map((d, i) => {
-    const x = xScale(i);
-    const y = yScale(d.value);
-    return i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`;
-  }).join(" ");
+  const linePath = trendData
+    .map((d, i) => `${i === 0 ? "M" : "L"} ${xS(i).toFixed(1)} ${yS(d.value).toFixed(1)}`)
+    .join(" ");
 
-  // Create area fill
-  const areaPath = `${linePath} L ${xScale(trendData.length - 1)} ${padding.top + chartHeight} L ${padding.left} ${padding.top + chartHeight} Z`;
-
-  // Determine trend direction
-  const isRising = momentum > 0;
-  const trendColor = isRising ? "#10b981" : "#ef4444";
-  const trendIcon = isRising ? "↗" : "↘";
+  const areaPath = `${linePath} L ${xS(trendData.length - 1).toFixed(1)} ${(pad.top + cH).toFixed(1)} L ${pad.left} ${(pad.top + cH).toFixed(1)} Z`;
 
   return (
     <div style={{
-      background: `linear-gradient(135deg, ${T.bgRaised} 0%, ${T.bg} 100%)`,
+      background: T.bgRaised,
       border: `1px solid ${T.borderMid}`,
-      borderRadius: 12,
-      padding: "32px",
-      marginBottom: 32,
-      position: "relative",
+      borderRadius: 14,
       overflow: "hidden",
+      marginBottom: 36,
+      position: "relative",
     }}>
-      {/* Background accent */}
+      {/* Amber top accent bar */}
       <div style={{
-        position: "absolute",
-        top: -50,
-        right: -50,
-        width: 200,
-        height: 200,
-        background: `radial-gradient(circle, ${T.accent}15 0%, transparent 70%)`,
-        pointerEvents: "none",
+        height: 3,
+        background: `linear-gradient(90deg, ${T.accent}, ${T.accentHi} 50%, ${T.accentLow})`,
       }} />
 
-      {/* Header */}
-      <div style={{ position: "relative", zIndex: 1, marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+      {/* Radial glow — decorative only */}
+      <div style={{
+        position: "absolute",
+        top: -80,
+        right: -80,
+        width: 260,
+        height: 260,
+        background: `radial-gradient(circle, ${T.accent}10 0%, transparent 70%)`,
+        pointerEvents: "none",
+        zIndex: 0,
+      }} />
+
+      <div style={{ padding: "28px 32px", position: "relative", zIndex: 1 }}>
+
+        {/* ── Header label ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
           <span style={{
+            fontFamily: T.fontBody,
             background: T.accent,
-            color: "white",
-            fontSize: 11,
-            fontWeight: 700,
-            padding: "4px 10px",
-            borderRadius: 6,
-            letterSpacing: "0.08em",
+            color: "#0c0905",
+            fontSize: 9,
+            fontWeight: 800,
+            padding: "5px 11px",
+            borderRadius: 5,
+            letterSpacing: "0.12em",
             textTransform: "uppercase",
           }}>
             🔥 Hype of the Month
           </span>
           <span style={{
+            fontFamily: T.fontBody,
             fontSize: 12,
             color: T.inkLow,
-            letterSpacing: "0.05em",
+            letterSpacing: "0.06em",
           }}>
-            {city} · {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            {city && `${city} · `}
+            {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </span>
         </div>
-        <h2 style={{
-          fontFamily: T.fontDisplay,
-          fontSize: 36,
-          fontWeight: 700,
-          color: T.ink,
-          lineHeight: 1.2,
-          letterSpacing: "-0.01em",
+
+        {/* ── Main grid: left info + right chart ── */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          gap: 36,
+          alignItems: "start",
         }}>
-          {restaurant.name}
-        </h2>
-        <p style={{ fontSize: 13, color: T.inkMid, marginTop: 6 }}>
-          {restaurant.neighborhood} · {restaurant.cuisine}
-        </p>
-      </div>
 
-      {/* Content Grid */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr auto",
-        gap: 32,
-        alignItems: "center",
-        position: "relative",
-        zIndex: 1,
-      }}>
-        {/* Left: Stats and Description */}
-        <div>
-          {/* Score Badge */}
-          <div style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            background: `${trendColor}15`,
-            border: `1px solid ${trendColor}40`,
-            borderRadius: 8,
-            padding: "8px 16px",
-            marginBottom: 16,
-          }}>
-            <span style={{
+          {/* ── Left: content ── */}
+          <div>
+            <h2 style={{
               fontFamily: T.fontDisplay,
-              fontSize: 28,
+              fontSize: 40,
               fontWeight: 700,
-              color: trendColor,
+              color: T.ink,
+              lineHeight: 1.1,
+              letterSpacing: "-0.02em",
+              margin: "0 0 6px",
             }}>
-              {hypeScore.toFixed(1)}
-            </span>
-            <div style={{ fontSize: 11, color: T.inkMid, lineHeight: 1.3 }}>
-              <div style={{ fontWeight: 600, letterSpacing: "0.05em" }}>HYPE SCORE</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                <span style={{ color: trendColor, fontSize: 14 }}>{trendIcon}</span>
-                <span>{Math.abs(momentum).toFixed(1)}% this week</span>
-              </div>
-            </div>
-          </div>
+              {restaurant.name}
+            </h2>
+            <p style={{
+              fontFamily: T.fontBody,
+              fontSize: 13,
+              color: T.inkMid,
+              marginBottom: 22,
+              letterSpacing: "0.02em",
+            }}>
+              {restaurant.neighborhood} · {restaurant.cuisine}
+            </p>
 
-          {/* Key Metrics */}
-          <div style={{
-            display: "flex",
-            gap: 24,
-            marginBottom: 16,
-          }}>
-            <div>
-              <div style={{
-                fontFamily: T.fontDisplay,
-                fontSize: 22,
-                fontWeight: 700,
-                color: T.ink,
-              }}>
-                {restaurant.reviews}
-              </div>
-              <div style={{
-                fontSize: 10,
-                color: T.inkLow,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                marginTop: 2,
-              }}>
-                Reviews
-              </div>
+            {/* Score pills */}
+            <div style={{ display: "flex", gap: 24, marginBottom: 22 }}>
+              {[
+                { label: "Hype Score",    value: hypeScore,                 color: T.hype,   fmt: v => v.toFixed(1) },
+                { label: "Reality Score", value: restaurant.realityScore,   color: T.worthy, fmt: v => v.toFixed(1) },
+                { label: "Reviews",       value: restaurant.reviews,        color: T.accent, fmt: v => v.toLocaleString() },
+              ].map(({ label, value, color, fmt }) => (
+                <div key={label}>
+                  <div style={{
+                    fontFamily: T.fontDisplay,
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color,
+                    lineHeight: 1,
+                    marginBottom: 4,
+                  }}>
+                    {fmt(value)}
+                  </div>
+                  <div style={{
+                    fontFamily: T.fontBody,
+                    fontSize: 9,
+                    color: T.inkLow,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                  }}>
+                    {label}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div>
-              <div style={{
-                fontFamily: T.fontDisplay,
-                fontSize: 22,
-                fontWeight: 700,
-                color: T.ink,
-              }}>
-                {restaurant.realityScore.toFixed(1)}
-              </div>
-              <div style={{
-                fontSize: 10,
-                color: T.inkLow,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                marginTop: 2,
-              }}>
-                Reality Score
-              </div>
-            </div>
-          </div>
 
-          {/* Description */}
-          <p style={{
-            fontSize: 13,
-            lineHeight: 1.6,
-            color: T.inkMid,
-            marginBottom: 16,
-          }}>
-            {restaurant.description || "This restaurant is making waves in the community with consistent quality and growing popularity."}
-          </p>
-
-          {/* CTA */}
-          <Link
-            to={`/restaurant/${restaurant.id}`}
-            style={{
+            {/* Momentum badge */}
+            <div style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              padding: "10px 20px",
-              background: T.accent,
-              color: "white",
-              fontSize: 13,
-              fontWeight: 600,
+              background: isRising ? "#4ade8012" : "#f8717112",
+              border: `1px solid ${trendColor}25`,
               borderRadius: 8,
-              textDecoration: "none",
-              transition: "all 0.2s",
-              letterSpacing: "0.02em",
-            }}
-            onMouseEnter={(e) => e.target.style.transform = "translateY(-2px)"}
-            onMouseLeave={(e) => e.target.style.transform = "translateY(0)"}
-          >
-            View Full Details
-            <span style={{ fontSize: 16 }}>→</span>
-          </Link>
-        </div>
-
-        {/* Right: Trend Graph */}
-        <div style={{
-          background: "white",
-          border: `1px solid ${T.border}`,
-          borderRadius: 10,
-          padding: 20,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-        }}>
-          <div style={{ marginBottom: 12 }}>
-            <h3 style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: T.inkLow,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              marginBottom: 4,
+              padding: "7px 14px",
+              marginBottom: 20,
             }}>
-              Popularity Trend
-            </h3>
-            <p style={{ fontSize: 11, color: T.inkLow }}>
-              Last 8 weeks
-            </p>
+              <span style={{
+                fontFamily: T.fontMono,
+                fontSize: 16,
+                fontWeight: 700,
+                color: trendColor,
+              }}>
+                {isRising ? "↗" : "↘"} {Math.abs(momentum).toFixed(1)}%
+              </span>
+              <span style={{
+                fontFamily: T.fontBody,
+                fontSize: 11,
+                color: T.inkMid,
+              }}>
+                this week
+              </span>
+            </div>
+
+            {/* Description pull-quote */}
+            {restaurant.description && (
+              <p style={{
+                fontFamily: T.fontBody,
+                fontSize: 13,
+                lineHeight: 1.75,
+                color: T.inkMid,
+                marginBottom: 24,
+                borderLeft: `2px solid ${T.accent}`,
+                paddingLeft: 14,
+                fontStyle: "italic",
+              }}>
+                {restaurant.description}
+              </p>
+            )}
+
+            {/* CTA */}
+            <Link
+              to={`/restaurant/${restaurant.id}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "11px 22px",
+                background: T.accent,
+                color: "#0c0905",
+                fontFamily: T.fontBody,
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                borderRadius: 8,
+                textDecoration: "none",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background  = T.accentHi;
+                e.currentTarget.style.transform   = "translateY(-2px)";
+                e.currentTarget.style.boxShadow   = `0 6px 20px ${T.accentDim}`;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background  = T.accent;
+                e.currentTarget.style.transform   = "translateY(0)";
+                e.currentTarget.style.boxShadow   = "none";
+              }}
+            >
+              View Full Details
+              <span style={{ fontSize: 15 }}>→</span>
+            </Link>
           </div>
 
-          <svg
-            width={graphWidth}
-            height={graphHeight}
-            style={{ display: "block" }}
-          >
-            {/* Grid lines */}
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-              const y = padding.top + chartHeight * (1 - ratio);
-              return (
-                <line
-                  key={ratio}
-                  x1={padding.left}
-                  y1={y}
-                  x2={graphWidth - padding.right}
-                  y2={y}
-                  stroke={T.border}
-                  strokeWidth={1}
-                  strokeDasharray="2,2"
-                />
-              );
-            })}
+          {/* ── Right: trend chart ── */}
+          <div style={{
+            background: T.bg,
+            border: `1px solid ${T.border}`,
+            borderRadius: 12,
+            padding: "18px 18px 14px",
+            minWidth: gW + 36,
+          }}>
+            {/* Chart header */}
+            <div style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              marginBottom: 14,
+            }}>
+              <div>
+                <p style={{
+                  fontFamily: T.fontBody,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: T.inkLow,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  marginBottom: 2,
+                }}>
+                  Popularity Trend
+                </p>
+                <p style={{
+                  fontFamily: T.fontBody,
+                  fontSize: 10,
+                  color: T.inkLow,
+                }}>
+                  Last 8 weeks
+                </p>
+              </div>
+              <span style={{
+                fontFamily: T.fontMono,
+                fontSize: 12,
+                fontWeight: 700,
+                color: trendColor,
+              }}>
+                {isRising ? "↗" : "↘"} {Math.abs(momentum).toFixed(1)}%
+              </span>
+            </div>
 
-            {/* Area fill */}
-            <path
-              d={areaPath}
-              fill={`${trendColor}15`}
-              stroke="none"
-            />
+            {/* SVG chart — accessible */}
+            <svg
+              width={gW}
+              height={gH}
+              role="img"
+              aria-label={`Popularity trend for ${restaurant.name} — last 8 weeks. Peak: ${maxV.toFixed(1)}, Current: ${trendData[trendData.length - 1].value.toFixed(1)}`}
+              style={{ display: "block", overflow: "visible" }}
+            >
+              <title>{restaurant.name} — Popularity Trend (last 8 weeks)</title>
 
-            {/* Line */}
-            <path
-              d={linePath}
-              fill="none"
-              stroke={trendColor}
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-
-            {/* Data points */}
-            {trendData.map((d, i) => {
-              const cx = xScale(i);
-              const cy = yScale(d.value);
-              const isHovered = hoveredPoint === i;
-
-              return (
-                <g key={i}>
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={isHovered ? 6 : 4}
-                    fill={trendColor}
-                    stroke="white"
-                    strokeWidth={2}
-                    style={{
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                    onMouseEnter={() => setHoveredPoint(i)}
-                    onMouseLeave={() => setHoveredPoint(null)}
+              {/* Grid lines */}
+              {[0, 0.33, 0.67, 1].map(ratio => {
+                const y = pad.top + cH * (1 - ratio);
+                return (
+                  <line
+                    key={ratio}
+                    x1={pad.left} y1={y}
+                    x2={gW - pad.right} y2={y}
+                    stroke={T.border}
+                    strokeWidth={1}
+                    strokeDasharray="3,3"
                   />
-                  {isHovered && (
-                    <g>
-                      {/* Tooltip background */}
-                      <rect
-                        x={cx - 35}
-                        y={cy - 45}
-                        width={70}
-                        height={32}
-                        rx={6}
-                        fill={T.ink}
-                        opacity={0.95}
-                      />
-                      {/* Tooltip text */}
-                      <text
-                        x={cx}
-                        y={cy - 30}
-                        textAnchor="middle"
-                        fontSize={10}
-                        fill="white"
-                        fontWeight={600}
-                      >
-                        {d.label}
-                      </text>
-                      <text
-                        x={cx}
-                        y={cy - 18}
-                        textAnchor="middle"
-                        fontSize={13}
-                        fill="white"
-                        fontWeight={700}
-                      >
-                        {d.value.toFixed(1)}
-                      </text>
-                    </g>
-                  )}
-                </g>
-              );
-            })}
+                );
+              })}
 
-            {/* X-axis labels */}
-            {trendData.map((d, i) => {
-              if (i % 2 !== 0) return null; // Show every other label
-              const x = xScale(i);
-              return (
+              {/* Area fill */}
+              <path d={areaPath} fill={`${trendColor}10`} />
+
+              {/* Line */}
+              <path
+                d={linePath}
+                fill="none"
+                stroke={trendColor}
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Data points */}
+              {trendData.map((d, i) => {
+                const cx  = xS(i);
+                const cy  = yS(d.value);
+                const hov = hoveredPoint === i;
+
+                return (
+                  <g key={i}>
+                    {/* Halo on hover */}
+                    {hov && (
+                      <circle cx={cx} cy={cy} r={14}
+                        fill={`${trendColor}12`} />
+                    )}
+
+                    {/* Point */}
+                    <circle
+                      cx={cx} cy={cy}
+                      r={hov ? 5.5 : 3.5}
+                      fill={trendColor}
+                      stroke={T.bg}
+                      strokeWidth={2}
+                      style={{ cursor: "pointer", transition: "r 0.15s" }}
+                      onMouseEnter={() => setHoveredPoint(i)}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                    />
+
+                    {/* Tooltip */}
+                    {hov && (
+                      <g>
+                        <rect
+                          x={cx - 32} y={cy - 46}
+                          width={64} height={32}
+                          rx={7}
+                          fill={T.bgCard}
+                          stroke={T.borderMid}
+                          strokeWidth={1}
+                        />
+                        <text
+                          x={cx} y={cy - 32}
+                          textAnchor="middle"
+                          fontSize={9}
+                          fill={T.inkLow}
+                          fontFamily={T.fontBody}
+                        >
+                          {d.label}
+                        </text>
+                        <text
+                          x={cx} y={cy - 19}
+                          textAnchor="middle"
+                          fontSize={13}
+                          fill={trendColor}
+                          fontWeight={700}
+                          fontFamily={T.fontDisplay}
+                        >
+                          {d.value.toFixed(1)}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* X-axis labels — every other */}
+              {trendData.map((d, i) => i % 2 !== 0 ? null : (
                 <text
                   key={i}
-                  x={x}
-                  y={graphHeight - 8}
+                  x={xS(i)} y={gH - 6}
                   textAnchor="middle"
                   fontSize={9}
                   fill={T.inkLow}
+                  fontFamily={T.fontBody}
                 >
                   {d.label}
                 </text>
-              );
-            })}
+              ))}
 
-            {/* Y-axis labels */}
-            {[minValue, (minValue + maxValue) / 2, maxValue].map((value, i) => {
-              const y = yScale(value);
-              return (
+              {/* Y-axis labels */}
+              {[minV, (minV + maxV) / 2, maxV].map((v, i) => (
                 <text
                   key={i}
-                  x={padding.left - 8}
-                  y={y + 4}
+                  x={pad.left - 7} y={yS(v) + 3}
                   textAnchor="end"
-                  fontSize={10}
+                  fontSize={9}
                   fill={T.inkLow}
+                  fontFamily={T.fontBody}
                 >
-                  {value.toFixed(0)}
+                  {v.toFixed(0)}
                 </text>
-              );
-            })}
-          </svg>
+              ))}
+            </svg>
 
-          {/* Graph legend */}
-          <div style={{
-            marginTop: 12,
-            paddingTop: 12,
-            borderTop: `1px solid ${T.border}`,
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: 10,
-            color: T.inkLow,
-          }}>
-            <span>Peak: {maxValue.toFixed(1)}</span>
-            <span>Current: {trendData[trendData.length - 1].value.toFixed(1)}</span>
+            {/* Chart footer */}
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              paddingTop: 10,
+              marginTop: 10,
+              borderTop: `1px solid ${T.border}`,
+              fontFamily: T.fontMono,
+              fontSize: 10,
+              color: T.inkLow,
+            }}>
+              <span>Peak {maxV.toFixed(1)}</span>
+              <span>Now {trendData[trendData.length - 1].value.toFixed(1)}</span>
+            </div>
           </div>
         </div>
       </div>

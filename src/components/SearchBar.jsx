@@ -1,140 +1,163 @@
-import { useState, useEffect, useRef } from "react";
-import { T } from "../tokens";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { T } from "../tokens";
+
+const SearchIcon = ({ color }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ pointerEvents: "none" }}>
+    <circle cx="6.5" cy="6.5" r="4.5" stroke={color} strokeWidth="1.6" />
+    <path d="M13 13L10 10" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const ArrowIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <path d="M2.5 6.5h8M7 2.5l4 4-4 4" stroke={T.inkLow} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 export default function SearchBar({ restaurants, onFilter }) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm]         = useState("");
+  const [isOpen, setIsOpen]                 = useState(false);
   const [filteredResults, setFilteredResults] = useState([]);
-  const [activeFilter, setActiveFilter] = useState("all"); // all, cuisine, neighborhood
-  const searchRef = useRef(null);
+  const [activeFilter, setActiveFilter]     = useState("all");
+  const [isFocused, setIsFocused]           = useState(false);
+  const [hoveredId, setHoveredId]           = useState(null);
 
-  // Close dropdown when clicking outside
+  const searchRef = useRef(null);
+  const inputRef  = useRef(null);
+
+  // Stable callback ref — prevents infinite loop when parent passes inline fn
+  const onFilterRef = useRef(onFilter);
+  useEffect(() => { onFilterRef.current = onFilter; });
+
+  // Close on outside click
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
+    function handleClickOutside(e) {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
         setIsOpen(false);
+        setIsFocused(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter restaurants based on search term
+  // Debounced filter
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredResults([]);
-      setIsOpen(false);
-      if (onFilter) onFilter(restaurants); // Reset filter
-      return;
-    }
+    const timer = setTimeout(() => {
+      if (!searchTerm.trim()) {
+        setFilteredResults([]);
+        setIsOpen(false);
+        onFilterRef.current?.(restaurants);
+        return;
+      }
 
-    const term = searchTerm.toLowerCase();
-    const results = restaurants.filter(r => {
-      const matchesName = r.name.toLowerCase().includes(term);
-      const matchesCuisine = r.cuisine.toLowerCase().includes(term);
-      const matchesNeighborhood = r.neighborhood.toLowerCase().includes(term);
+      const term = searchTerm.toLowerCase();
+      const results = restaurants.filter(r => {
+        const byName         = r.name.toLowerCase().includes(term);
+        const byCuisine      = r.cuisine.toLowerCase().includes(term);
+        const byNeighborhood = r.neighborhood.toLowerCase().includes(term);
+        if (activeFilter === "cuisine")      return byCuisine;
+        if (activeFilter === "neighborhood") return byNeighborhood;
+        return byName || byCuisine || byNeighborhood;
+      });
 
-      if (activeFilter === "cuisine") return matchesCuisine;
-      if (activeFilter === "neighborhood") return matchesNeighborhood;
-      return matchesName || matchesCuisine || matchesNeighborhood;
-    });
+      setFilteredResults(results);
+      setIsOpen(results.length > 0 || searchTerm.length > 0);
+      onFilterRef.current?.(results);
+    }, 150);
 
-    setFilteredResults(results);
-    setIsOpen(results.length > 0);
-    if (onFilter) onFilter(results);
-  }, [searchTerm, restaurants, activeFilter, onFilter]);
+    return () => clearTimeout(timer);
+  }, [searchTerm, restaurants, activeFilter]);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     setSearchTerm("");
     setFilteredResults([]);
     setIsOpen(false);
-    if (onFilter) onFilter(restaurants);
-  };
+    onFilterRef.current?.(restaurants);
+    inputRef.current?.focus();
+  }, [restaurants]);
 
-  // Get unique cuisines and neighborhoods for quick filters
-  const cuisines = [...new Set(restaurants.map(r => r.cuisine))].slice(0, 5);
-  const neighborhoods = [...new Set(restaurants.map(r => r.neighborhood))].slice(0, 5);
+  const filters = [
+    { key: "all",          label: "All"     },
+    { key: "cuisine",      label: "Cuisine" },
+    { key: "neighborhood", label: "Area"    },
+  ];
+
+  const borderColor = isFocused ? T.accent : T.border;
+  const shadowStyle = isFocused
+    ? `0 0 0 3px ${T.accentDim}, 0 4px 20px rgba(0,0,0,0.5)`
+    : "0 2px 10px rgba(0,0,0,0.35)";
 
   return (
     <div ref={searchRef} style={{ position: "relative", width: "100%" }}>
-      {/* Search Input Container */}
-      <div style={{
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-      }}>
-        {/* Search Icon & Input */}
-        <div style={{
-          flex: 1,
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-        }}>
-          <span style={{
-            position: "absolute",
-            left: 14,
-            fontSize: 16,
-            color: T.inkLow,
-            pointerEvents: "none",
-          }}>
-            🔍
+
+      {/* ── Input row ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+
+        {/* Search input */}
+        <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
+          <span style={{ position: "absolute", left: 15, display: "flex", alignItems: "center" }}>
+            <SearchIcon color={isFocused ? T.accent : T.inkLow} />
           </span>
+
           <input
+            ref={inputRef}
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onFocus={() => searchTerm && setIsOpen(true)}
-            placeholder="Search restaurants, cuisines, or neighborhoods..."
+            onChange={e => setSearchTerm(e.target.value)}
+            onFocus={() => {
+              setIsFocused(true);
+              if (searchTerm) setIsOpen(true);
+            }}
+            onBlur={() => setIsFocused(false)}
+            placeholder="Search restaurants, cuisines, neighborhoods…"
             style={{
               width: "100%",
-              padding: "12px 40px 12px 40px",
+              padding: "13px 44px",
               fontSize: 14,
-              border: `1px solid ${searchTerm ? T.accent : T.border}`,
+              fontFamily: T.fontBody,
+              fontWeight: 400,
+              color: T.ink,
+              background: T.bgCard,
+              border: `1.5px solid ${borderColor}`,
               borderRadius: 10,
               outline: "none",
-              transition: "all 0.2s",
-              background: "white",
-              color: T.ink,
-            }}
-            onFocusCapture={(e) => {
-              e.target.style.borderColor = T.accent;
-              e.target.style.boxShadow = `0 0 0 3px ${T.accent}20`;
-            }}
-            onBlurCapture={(e) => {
-              if (!searchTerm) {
-                e.target.style.borderColor = T.border;
-                e.target.style.boxShadow = "none";
-              }
+              transition: "border-color 0.2s, box-shadow 0.2s",
+              boxShadow: shadowStyle,
+              letterSpacing: "0.01em",
             }}
           />
+
+          {/* Clear button */}
           {searchTerm && (
             <button
               onClick={handleClear}
               style={{
                 position: "absolute",
-                right: 10,
-                background: T.bgRaised,
+                right: 12,
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: T.border,
                 border: "none",
-                borderRadius: 6,
-                width: 24,
-                height: 24,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                fontSize: 14,
-                color: T.inkLow,
-                transition: "all 0.2s",
+                color: T.inkMid,
+                fontSize: 10,
+                fontWeight: 700,
+                transition: "all 0.15s",
+                lineHeight: 1,
               }}
-              onMouseEnter={(e) => {
-                e.target.style.background = T.accent;
-                e.target.style.color = "white";
+              onMouseEnter={e => {
+                e.currentTarget.style.background = T.accent;
+                e.currentTarget.style.color = "#0c0905";
               }}
-              onMouseLeave={(e) => {
-                e.target.style.background = T.bgRaised;
-                e.target.style.color = T.inkLow;
+              onMouseLeave={e => {
+                e.currentTarget.style.background = T.border;
+                e.currentTarget.style.color = T.inkMid;
               }}
             >
               ✕
@@ -142,258 +165,231 @@ export default function SearchBar({ restaurants, onFilter }) {
           )}
         </div>
 
-        {/* Filter Buttons */}
-        <div style={{ display: "flex", gap: 6 }}>
-          {[
-            { key: "all", label: "All", icon: "🏠" },
-            { key: "cuisine", label: "Cuisine", icon: "🍽️" },
-            { key: "neighborhood", label: "Area", icon: "📍" },
-          ].map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => setActiveFilter(key)}
-              style={{
-                padding: "8px 12px",
-                fontSize: 12,
-                fontWeight: 600,
-                border: `1px solid ${activeFilter === key ? T.accent : T.border}`,
-                borderRadius: 8,
-                background: activeFilter === key ? `${T.accent}15` : "white",
-                color: activeFilter === key ? T.accent : T.inkMid,
-                cursor: "pointer",
-                transition: "all 0.2s",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => {
-                if (activeFilter !== key) {
-                  e.target.style.borderColor = T.borderMid;
-                  e.target.style.background = T.bgRaised;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeFilter !== key) {
-                  e.target.style.borderColor = T.border;
-                  e.target.style.background = "white";
-                }
-              }}
-            >
-              <span>{icon}</span>
-              <span style={{ letterSpacing: "0.02em" }}>{label}</span>
-            </button>
-          ))}
+        {/* Filter buttons */}
+        <div style={{
+          display: "flex",
+          gap: 4,
+          background: T.bgCard,
+          border: `1.5px solid ${T.border}`,
+          borderRadius: 10,
+          padding: "4px",
+          flexShrink: 0,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.35)",
+        }}>
+          {filters.map(({ key, label }) => {
+            const active = activeFilter === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveFilter(key)}
+                style={{
+                  padding: "8px 14px",
+                  fontSize: 12,
+                  fontWeight: active ? 700 : 500,
+                  fontFamily: T.fontBody,
+                  letterSpacing: "0.04em",
+                  background: active ? T.accent : "transparent",
+                  color: active ? "#0c0905" : T.inkMid,
+                  border: "none",
+                  borderRadius: 7,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={e => {
+                  if (!active) {
+                    e.currentTarget.style.background = T.bgHover;
+                    e.currentTarget.style.color = T.ink;
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!active) {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = T.inkMid;
+                  }
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Search Results Dropdown */}
-      {isOpen && filteredResults.length > 0 && (
+      {/* ── Dropdown ── */}
+      {isOpen && (
         <div style={{
           position: "absolute",
           top: "calc(100% + 8px)",
           left: 0,
           right: 0,
-          maxHeight: 480,
+          maxHeight: 460,
           overflowY: "auto",
-          background: "white",
-          border: `1px solid ${T.border}`,
+          background: T.bgCard,
+          border: `1.5px solid ${T.borderMid}`,
           borderRadius: 12,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
           zIndex: 100,
         }}>
-          {/* Results Header */}
-          <div style={{
-            padding: "12px 16px",
-            borderBottom: `1px solid ${T.border}`,
-            background: T.bgRaised,
-            position: "sticky",
-            top: 0,
-            zIndex: 1,
-          }}>
-            <p style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: T.inkLow,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-            }}>
-              {filteredResults.length} {filteredResults.length === 1 ? "Result" : "Results"} for "{searchTerm}"
-            </p>
-          </div>
 
-          {/* Results List */}
-          <div>
-            {filteredResults.map((restaurant) => (
-              <Link
-                key={restaurant.id}
-                to={`/restaurant/${restaurant.id}`}
-                onClick={() => {
-                  setIsOpen(false);
-                }}
-                style={{
-                  display: "flex",
-                  padding: "14px 16px",
-                  borderBottom: `1px solid ${T.border}`,
-                  textDecoration: "none",
-                  transition: "all 0.15s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = T.bgRaised;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "white";
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginBottom: 6,
-                  }}>
-                    <h4 style={{
-                      fontSize: 15,
-                      fontWeight: 600,
-                      color: T.ink,
-                      margin: 0,
-                    }}>
-                      {restaurant.name}
-                    </h4>
-                    {/* Hype Badge */}
-                    {Math.abs(restaurant.hypeScore - restaurant.realityScore) > 2 && (
-                      <span style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: "2px 6px",
-                        borderRadius: 4,
-                        background: restaurant.realityScore > restaurant.hypeScore 
-                          ? "#10b98120" 
-                          : "#ef444420",
-                        color: restaurant.realityScore > restaurant.hypeScore 
-                          ? "#10b981" 
-                          : "#ef4444",
-                        letterSpacing: "0.04em",
-                      }}>
-                        {restaurant.realityScore > restaurant.hypeScore ? "UNDERRATED" : "OVERHYPED"}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 12,
-                    color: T.inkMid,
-                  }}>
-                    <span>{restaurant.cuisine}</span>
-                    <span style={{ color: T.inkLow }}>•</span>
-                    <span>{restaurant.neighborhood}</span>
-                    <span style={{ color: T.inkLow }}>•</span>
-                    <span style={{ color: T.accent, fontWeight: 600 }}>
-                      ★ {restaurant.realityScore.toFixed(1)}
-                    </span>
-                  </div>
-                </div>
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
+          {/* Results */}
+          {filteredResults.length > 0 ? (
+            <>
+              {/* Header */}
+              <div style={{
+                padding: "10px 16px",
+                borderBottom: `1px solid ${T.border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                position: "sticky",
+                top: 0,
+                background: T.bgCard,
+                zIndex: 1,
+              }}>
+                <span style={{
+                  fontFamily: T.fontBody,
+                  fontSize: 9,
+                  fontWeight: 700,
                   color: T.inkLow,
-                  fontSize: 14,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
                 }}>
-                  →
-                </div>
-              </Link>
-            ))}
-          </div>
+                  {filteredResults.length} {filteredResults.length === 1 ? "result" : "results"}
+                </span>
+                <span style={{
+                  fontFamily: T.fontBody,
+                  fontSize: 11,
+                  color: T.inkLow,
+                  fontStyle: "italic",
+                }}>
+                  "{searchTerm}"
+                </span>
+              </div>
 
-          {/* Quick Filter Suggestions (shown when no search term) */}
-          {!searchTerm && (cuisines.length > 0 || neighborhoods.length > 0) && (
+              {/* Result rows */}
+              {filteredResults.map((r, i) => {
+                const delta = r.realityScore - r.hypeScore;
+                const isUnder = delta > 2;
+                const isOver  = delta < -2;
+                const isHov   = hoveredId === r.id;
+
+                return (
+                  <Link
+                    key={r.id}
+                    to={`/restaurant/${r.id}`}
+                    onClick={() => setIsOpen(false)}
+                    onMouseEnter={() => setHoveredId(r.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "13px 16px",
+                      borderBottom: i < filteredResults.length - 1 ? `1px solid ${T.border}` : "none",
+                      textDecoration: "none",
+                      background: isHov ? T.bgHover : "transparent",
+                      transition: "background 0.12s",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {/* Score circle */}
+                    <div style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: "50%",
+                      background: T.bg,
+                      border: `1.5px solid ${isHov ? T.accent : T.border}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      transition: "border-color 0.15s",
+                    }}>
+                      <span style={{
+                        fontFamily: T.fontDisplay,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: T.accent,
+                      }}>
+                        {r.realityScore.toFixed(1)}
+                      </span>
+                    </div>
+
+                    {/* Text */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 3,
+                      }}>
+                        <span style={{
+                          fontFamily: T.fontDisplay,
+                          fontSize: 15,
+                          fontWeight: 600,
+                          color: T.ink,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}>
+                          {r.name}
+                        </span>
+                        {(isUnder || isOver) && (
+                          <span style={{
+                            flexShrink: 0,
+                            fontFamily: T.fontBody,
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: "0.07em",
+                            textTransform: "uppercase",
+                            padding: "2px 7px",
+                            borderRadius: 4,
+                            background: isUnder ? "#4ade8015" : "#f8717115",
+                            color:      isUnder ? "#4ade80"   : "#f87171",
+                          }}>
+                            {isUnder ? "Underrated" : "Overhyped"}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{
+                        fontFamily: T.fontBody,
+                        fontSize: 11,
+                        color: T.inkMid,
+                      }}>
+                        {r.cuisine} · {r.neighborhood}
+                      </span>
+                    </div>
+
+                    <ArrowIcon />
+                  </Link>
+                );
+              })}
+            </>
+          ) : (
+            /* ── No results ── */
             <div style={{
-              padding: "16px",
-              background: T.bgRaised,
-              borderTop: `1px solid ${T.border}`,
+              padding: "40px 24px",
+              textAlign: "center",
             }}>
-              {cuisines.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <p style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: T.inkLow,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    marginBottom: 8,
-                  }}>
-                    Popular Cuisines
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {cuisines.map(cuisine => (
-                      <button
-                        key={cuisine}
-                        onClick={() => {
-                          setSearchTerm(cuisine);
-                          setActiveFilter("cuisine");
-                        }}
-                        style={{
-                          padding: "4px 10px",
-                          fontSize: 11,
-                          background: "white",
-                          border: `1px solid ${T.border}`,
-                          borderRadius: 6,
-                          color: T.inkMid,
-                          cursor: "pointer",
-                          transition: "all 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.borderColor = T.accent;
-                          e.target.style.color = T.accent;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.target.style.borderColor = T.border;
-                          e.target.style.color = T.inkMid;
-                        }}
-                      >
-                        {cuisine}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <span style={{ fontSize: 30, display: "block", marginBottom: 12 }}>🍽️</span>
+              <p style={{
+                fontFamily: T.fontDisplay,
+                fontSize: 16,
+                color: T.inkMid,
+                marginBottom: 6,
+              }}>
+                Nothing found for "{searchTerm}"
+              </p>
+              <p style={{
+                fontFamily: T.fontBody,
+                fontSize: 12,
+                color: T.inkLow,
+              }}>
+                Try a different cuisine, name, or neighborhood
+              </p>
             </div>
           )}
-        </div>
-      )}
-
-      {/* No Results */}
-      {isOpen && searchTerm && filteredResults.length === 0 && (
-        <div style={{
-          position: "absolute",
-          top: "calc(100% + 8px)",
-          left: 0,
-          right: 0,
-          background: "white",
-          border: `1px solid ${T.border}`,
-          borderRadius: 12,
-          padding: "32px 24px",
-          textAlign: "center",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-          zIndex: 100,
-        }}>
-          <span style={{ fontSize: 32, display: "block", marginBottom: 12 }}>🔍</span>
-          <p style={{
-            fontSize: 14,
-            color: T.inkMid,
-            marginBottom: 6,
-          }}>
-            No restaurants found for "{searchTerm}"
-          </p>
-          <p style={{
-            fontSize: 12,
-            color: T.inkLow,
-          }}>
-            Try searching for a different cuisine or neighborhood
-          </p>
         </div>
       )}
     </div>
