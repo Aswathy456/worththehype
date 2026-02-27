@@ -1,26 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ref, push, onValue, serverTimestamp } from "firebase/database";
+import { ref, onValue, query, orderByChild } from "firebase/database";
 import { db } from "../firebase";
 import { useRestaurants } from "../context/RestaurantContext";
 import { useAuth } from "../hooks/useAuth";
 import HypeGauge from "../components/HypeGauge";
 import VerdictBadge from "../components/VerdictBadge";
+import ReviewCard from "../components/ReviewCard";
+import { BadgeUnlockToast } from "../components/UserBadges";
+import { submitReview, getUserStats, saveUserBadges } from "../services/reviewService";
+import { computeEarnedBadges, computeNewBadges } from "../services/badgeService";
 import { T } from "../tokens";
 
+// ── Reputation helpers ────────────────────────────────────────────────────
 const REP = {
   New:     { color: T.inkLow,  bg: T.bgRaised },
   Regular: { color: "#4a7c8a", bg: "rgba(74,124,138,0.12)" },
   Veteran: { color: "#c17c2b", bg: "rgba(193,124,43,0.12)" },
 };
-
-function accountAgeLabel(createdMs) {
-  if (!createdMs) return "New";
-  const days = Math.floor((Date.now() - createdMs) / 86400000);
-  if (days < 30)  return `${days}d`;
-  if (days < 365) return `${Math.floor(days / 30)}mo`;
-  return `${(days / 365).toFixed(1)}yr`;
-}
 
 function reputationFromAge(createdMs) {
   if (!createdMs) return "New";
@@ -30,116 +27,122 @@ function reputationFromAge(createdMs) {
   return "New";
 }
 
-/* ── Single review card ──────────────────────────────────────── */
-function ReviewCard({ review }) {
-  const { displayName, accountCreated, hypeGiven, realityGiven, text, upvotes = 0, createdAt } = review;
-  const reputation = reputationFromAge(accountCreated);
-  const { color, bg } = REP[reputation];
-  const delta = realityGiven - hypeGiven;
-  const date = createdAt ? new Date(createdAt).toISOString().split("T")[0] : "—";
-
-  return (
-    <div style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "20px 22px", background: T.bgCard }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: "50%",
-            background: T.bgRaised, border: `1px solid ${T.borderMid}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 700, color: T.inkMid,
-          }}>
-            {(displayName || "?")[0].toUpperCase()}
-          </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>u/{displayName}</span>
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color, background: bg, padding: "2px 7px", borderRadius: 3 }}>
-                {reputation}
-              </span>
-            </div>
-            <p style={{ fontSize: 11, color: T.inkLow, marginTop: 1 }}>
-              {accountAgeLabel(accountCreated)} account · {date}
-            </p>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 16 }}>
-          {[["Hype", hypeGiven, T.hype], ["Reality", realityGiven, delta >= 0 ? T.worthy : T.accent]].map(([label, score, col]) => (
-            <div key={label} style={{ textAlign: "right" }}>
-              <p style={{ fontSize: 9, color: T.inkLow, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</p>
-              <p style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 700, color: col, lineHeight: 1 }}>{score}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <p style={{ fontFamily: T.fontDisplay, fontSize: 16, fontStyle: "italic", color: T.inkMid, lineHeight: 1.75, borderLeft: `2px solid ${T.border}`, paddingLeft: 14, marginBottom: 14 }}>
-        "{text}"
-      </p>
-
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 4, padding: "4px 12px", fontSize: 12, color: T.inkLow, display: "flex", alignItems: "center", gap: 5 }}>
-          ▲ <span style={{ fontWeight: 600 }}>{upvotes}</span>
-        </button>
-      </div>
-    </div>
-  );
+function accountAgeLabel(createdMs) {
+  if (!createdMs) return "New";
+  const days = Math.floor((Date.now() - createdMs) / 86400000);
+  if (days < 30)  return `${days}d`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${(days / 365).toFixed(1)}yr`;
 }
 
-/* ── Inline review form ──────────────────────────────────────── */
+// ── Inline review form ────────────────────────────────────────────────────
 function AddReviewForm({ restaurantId, user, onSubmitted }) {
-  const [hype, setHype]       = useState(5);
+  const [hype,    setHype]    = useState(5);
   const [reality, setReality] = useState(5);
-  const [text, setText]       = useState("");
+  const [text,    setText]    = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [error,   setError]   = useState("");
 
   const delta    = (reality - hype).toFixed(1);
-  const deltaPos = delta >= 0;
+  const deltaPos = parseFloat(delta) >= 0;
 
   const handleSubmit = async () => {
-    if (text.trim().length < 15) return setError("Write at least a sentence — the community needs detail.");
-    setLoading(true); setError("");
+    if (text.trim().length < 15) {
+      setError("Write at least a sentence — the community needs detail.");
+      return;
+    }
+    setLoading(true);
+    setError("");
     try {
-      await push(ref(db, `reviews/${restaurantId}`), {
-        uid: user.uid,
-        displayName: user.displayName,
-        accountCreated: user.accountCreated || null,
-        hypeGiven: hype,
-        realityGiven: reality,
-        text: text.trim(),
-        upvotes: 0,
-        createdAt: Date.now(),
-      });
+      await submitReview(restaurantId, user, { hypeGiven: hype, realityGiven: reality, text });
       setText(""); setHype(5); setReality(5);
       onSubmitted();
-    } catch (err) {
+    } catch {
       setError("Failed to submit. Please try again.");
     }
     setLoading(false);
   };
 
   return (
-    <div style={{ border: `1px solid ${T.borderMid}`, borderRadius: 10, padding: "24px", background: T.bgRaised, marginBottom: 32 }}>
-      <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: T.accent, marginBottom: 20 }}>
-        Your Review — as u/{user.displayName}
-      </p>
+    <div style={{
+      border:       `1px solid ${T.borderMid}`,
+      borderRadius: 12,
+      padding:      "26px",
+      background:   T.bgRaised,
+      marginBottom: 32,
+    }}>
+      {/* Form header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 22 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: "50%",
+          background: `linear-gradient(135deg, ${T.accent}60, ${T.accent}30)`,
+          border: `1.5px solid ${T.accent}50`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: T.fontDisplay, fontSize: 13, fontWeight: 700, color: T.accent,
+        }}>
+          {(user.displayName || "?")[0].toUpperCase()}
+        </div>
+        <div>
+          <p style={{
+            fontFamily: T.fontBody,
+            fontSize: 11, fontWeight: 700,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            color: T.accent, margin: 0,
+          }}>
+            Your Review
+          </p>
+          <p style={{
+            fontFamily: T.fontBody,
+            fontSize: 12, color: T.inkLow, margin: 0,
+          }}>
+            as u/{user.displayName}
+          </p>
+        </div>
+      </div>
 
+      {/* Score sliders */}
       {[
-        { label: "🔥 Hype Score", hint: "How hyped is this place?", val: hype, set: setHype, color: T.hype },
-        { label: "✦ Reality Score", hint: "How good was the actual experience?", val: reality, set: setReality, color: deltaPos ? T.worthy : T.accent },
+        { label: "🔥 Hype Score",    hint: "How hyped is this place online?", val: hype,    set: setHype,    color: T.hype   },
+        { label: "✦ Reality Score",  hint: "How good was your actual visit?",  val: reality, set: setReality, color: deltaPos ? T.worthy : T.accent },
       ].map(({ label, hint, val, set, color }) => (
-        <div key={label} style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <div key={label} style={{ marginBottom: 20 }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            marginBottom: 6,
+          }}>
             <div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>{label}</span>
-              <span style={{ fontSize: 11, color: T.inkLow, marginLeft: 8 }}>{hint}</span>
+              <span style={{
+                fontFamily: T.fontBody,
+                fontSize: 13, fontWeight: 600, color: T.ink,
+              }}>
+                {label}
+              </span>
+              <span style={{
+                fontFamily: T.fontBody,
+                fontSize: 11, color: T.inkLow, marginLeft: 8,
+              }}>
+                {hint}
+              </span>
             </div>
-            <span style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700, color }}>{val}</span>
+            <span style={{
+              fontFamily: T.fontDisplay,
+              fontSize: 24, fontWeight: 700, color,
+            }}>
+              {val}
+            </span>
           </div>
-          <input type="range" min="1" max="10" step="0.5" value={val}
+          <input
+            type="range" min="1" max="10" step="0.5"
+            value={val}
             onChange={e => set(parseFloat(e.target.value))}
-            style={{ width: "100%", accentColor: color, cursor: "pointer" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.inkLow, marginTop: 2 }}>
+            style={{ width: "100%", accentColor: color, cursor: "pointer" }}
+          />
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            fontFamily: T.fontBody, fontSize: 10, color: T.inkLow, marginTop: 2,
+          }}>
             <span>1</span><span>10</span>
           </div>
         </div>
@@ -148,88 +151,218 @@ function AddReviewForm({ restaurantId, user, onSubmitted }) {
       {/* Delta preview */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 16px", marginBottom: 18,
+        padding: "12px 18px", marginBottom: 20,
         background: T.bgCard, borderRadius: 8,
-        border: `1px solid ${deltaPos ? T.worthy : T.accent}33`,
+        border: `1px solid ${deltaPos ? "#4ade8030" : "#f8717130"}`,
       }}>
-        <span style={{ fontSize: 12, color: T.inkLow, letterSpacing: "0.06em", textTransform: "uppercase" }}>Your Delta</span>
+        <span style={{
+          fontFamily: T.fontBody,
+          fontSize: 11, color: T.inkLow,
+          letterSpacing: "0.08em", textTransform: "uppercase",
+        }}>
+          Your Delta
+        </span>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 700, color: deltaPos ? T.worthy : T.accent }}>
+          <span style={{
+            fontFamily: T.fontDisplay,
+            fontSize: 28, fontWeight: 700,
+            color: deltaPos ? T.worthy : T.hype,
+          }}>
             {deltaPos ? "+" : ""}{delta}
           </span>
-          <span style={{ fontSize: 12, color: T.inkMid }}>
+          <span style={{
+            fontFamily: T.fontBody,
+            fontSize: 12, color: T.inkMid,
+          }}>
             {deltaPos ? "✦ Worth the Hype" : "▽ Overhyped"}
           </span>
         </div>
       </div>
 
-      <div style={{ marginBottom: 16 }}>
-        <textarea value={text} onChange={e => { setText(e.target.value); setError(""); }}
+      {/* Text area */}
+      <div style={{ marginBottom: 18 }}>
+        <textarea
+          value={text}
+          onChange={e => { setText(e.target.value); setError(""); }}
           placeholder="What did you actually experience? Be specific — the community trusts detail."
           rows={4}
           style={{
             width: "100%", padding: "14px",
-            background: T.bgCard, border: `1px solid ${error ? T.accent : T.border}`,
-            borderRadius: 8, color: T.ink, fontSize: 14, lineHeight: 1.7,
-            resize: "vertical", outline: "none", fontFamily: T.fontBody,
-          }} />
+            background: T.bgCard,
+            border: `1.5px solid ${error ? T.hype : T.border}`,
+            borderRadius: 8,
+            color: T.ink, fontSize: 14, lineHeight: 1.7,
+            resize: "vertical", outline: "none",
+            fontFamily: T.fontBody,
+            transition: "border-color 0.2s",
+            boxSizing: "border-box",
+          }}
+        />
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-          {error ? <span style={{ fontSize: 12, color: T.accent }}>{error}</span> : <span />}
-          <span style={{ fontSize: 11, color: T.inkLow }}>{text.length} chars</span>
+          {error
+            ? <span style={{ fontFamily: T.fontBody, fontSize: 12, color: T.hype }}>{error}</span>
+            : <span />
+          }
+          <span style={{ fontFamily: T.fontBody, fontSize: 11, color: T.inkLow }}>
+            {text.length} chars
+          </span>
         </div>
       </div>
 
-      <button onClick={handleSubmit} disabled={loading}
+      {/* Submit */}
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
         style={{
           width: "100%", padding: "13px",
-          background: loading ? T.bgRaised : T.accent,
-          color: "#fff", border: "none", borderRadius: 8,
-          fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-        }}>
+          background: loading ? T.bgCard : T.accent,
+          color: loading ? T.inkMid : "#0c0905",
+          border: `1.5px solid ${loading ? T.border : T.accent}`,
+          borderRadius: 8,
+          fontFamily: T.fontBody,
+          fontSize: 13, fontWeight: 700,
+          letterSpacing: "0.04em",
+          cursor: loading ? "not-allowed" : "pointer",
+          transition: "all 0.2s",
+        }}
+        onMouseEnter={e => {
+          if (!loading) {
+            e.currentTarget.style.background = T.accentHi;
+            e.currentTarget.style.transform  = "translateY(-1px)";
+          }
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = loading ? T.bgCard : T.accent;
+          e.currentTarget.style.transform  = "translateY(0)";
+        }}
+      >
         {loading ? "Submitting…" : "Submit Review"}
       </button>
     </div>
   );
 }
 
-/* ── Main page ───────────────────────────────────────────────── */
+// ── Sort control ──────────────────────────────────────────────────────────
+function SortControl({ value, onChange }) {
+  const options = [
+    { key: "top",  label: "Top"  },
+    { key: "new",  label: "New"  },
+    { key: "controversial", label: "Controversial" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 4, background: T.bgRaised, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px" }}>
+      {options.map(o => {
+        const active = value === o.key;
+        return (
+          <button
+            key={o.key}
+            onClick={() => onChange(o.key)}
+            style={{
+              padding: "5px 14px",
+              fontFamily: T.fontBody,
+              fontSize: 12, fontWeight: active ? 700 : 500,
+              background: active ? T.bgCard : "transparent",
+              border: active ? `1px solid ${T.borderMid}` : "1px solid transparent",
+              borderRadius: 6,
+              color: active ? T.ink : T.inkMid,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────
 export default function RestaurantDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id }       = useParams();
+  const navigate     = useNavigate();
   const { findById } = useRestaurants();
-  const { user } = useAuth();
+  const { user }     = useAuth();
 
   const r = findById(id);
-  const [reviews, setReviews]       = useState([]);
-  const [showSuccess, setShowSuccess] = useState(false);
 
-  // Live reviews from Firebase
+  const [reviews,      setReviews]      = useState([]);
+  const [reviewIds,    setReviewIds]    = useState([]);
+  const [sortBy,       setSortBy]       = useState("top");
+  const [showSuccess,  setShowSuccess]  = useState(false);
+  const [newBadges,    setNewBadges]    = useState([]); // queue of badges to toast
+
+  // Badge toast queue management
+  const dismissBadge = (badgeId) => setNewBadges(q => q.filter(b => b.id !== badgeId));
+
+  // Live reviews from Realtime Database
   useEffect(() => {
-    const reviewsRef = ref(db, `reviews/${id}`);
+    const reviewsRef = query(ref(db, `reviews/${id}`), orderByChild("createdAt"));
     const unsub = onValue(reviewsRef, (snap) => {
       if (snap.exists()) {
-        const data = snap.val();
-        const list = Object.values(data).sort((a, b) => b.createdAt - a.createdAt);
-        setReviews(list);
+        const ids  = [];
+        const list = [];
+        snap.forEach(child => {
+          ids.push(child.key);
+          list.push(child.val());
+        });
+        // Reverse so newest first by default
+        setReviewIds(ids.reverse());
+        setReviews(list.reverse());
       } else {
+        setReviewIds([]);
         setReviews([]);
       }
     });
-    return unsub;
+    return () => unsub();
   }, [id]);
 
-  const handleSubmitted = () => {
+  // Sort reviews
+  const sortedReviews = [...reviews].map((r, i) => ({ ...r, _id: reviewIds[i] })).sort((a, b) => {
+    if (sortBy === "top")           return (b.score ?? 0) - (a.score ?? 0);
+    if (sortBy === "new")           return (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0);
+    if (sortBy === "controversial") {
+      // High downvotes + high upvotes = controversial
+      const controversyA = Math.min(a.upvotes ?? 0, a.downvotes ?? 0);
+      const controversyB = Math.min(b.upvotes ?? 0, b.downvotes ?? 0);
+      return controversyB - controversyA;
+    }
+    return 0;
+  });
+
+  // After submitting a review, check for new badges
+  const handleSubmitted = async () => {
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    setTimeout(() => setShowSuccess(false), 4000);
+
+    if (user) {
+      try {
+        const stats        = await getUserStats(user.uid);
+        const earned       = computeEarnedBadges(stats);
+        const existing     = stats?.badges ?? [];
+        const unlocked     = computeNewBadges(stats, existing);
+        if (unlocked.length > 0) {
+          setNewBadges(unlocked);
+          await saveUserBadges(user.uid, earned.map(b => b.id));
+        }
+      } catch { /* non-fatal */ }
+    }
   };
 
   if (!r) {
     return (
-      <div style={{ background: T.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{
+        background: T.bg, minHeight: "100vh",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
         <div style={{ textAlign: "center" }}>
-          <p style={{ fontFamily: T.fontDisplay, fontSize: 22, color: T.inkMid, fontStyle: "italic" }}>Loading restaurant…</p>
-          <p style={{ fontSize: 13, color: T.inkLow, marginTop: 8 }}>
-            <span style={{ color: T.accent, cursor: "pointer" }} onClick={() => navigate("/")}>← Go back home</span> so data can load first.
+          <p style={{ fontFamily: T.fontDisplay, fontSize: 22, color: T.inkMid, fontStyle: "italic" }}>
+            Loading restaurant…
+          </p>
+          <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow, marginTop: 8 }}>
+            <span style={{ color: T.accent, cursor: "pointer" }} onClick={() => navigate("/")}>
+              ← Go back home
+            </span>
           </p>
         </div>
       </div>
@@ -238,92 +371,256 @@ export default function RestaurantDetail() {
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh" }}>
+
+      {/* ── Badge unlock toasts ── */}
+      <div style={{
+        position: "fixed",
+        bottom: 24, right: 24,
+        zIndex: 300,
+        display: "flex", flexDirection: "column", gap: 10,
+        alignItems: "flex-end",
+      }}>
+        {newBadges.map(badge => (
+          <BadgeUnlockToast
+            key={badge.id}
+            badge={badge}
+            onDismiss={() => dismissBadge(badge.id)}
+          />
+        ))}
+      </div>
+
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 32px 80px" }}>
 
-        <button onClick={() => navigate("/")} style={{
-          background: "none", border: "none", padding: 0, color: T.inkLow,
-          fontSize: 12, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase",
-          marginBottom: 40, cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-        }}>
+        {/* Back button */}
+        <button
+          onClick={() => navigate("/")}
+          style={{
+            background: "none", border: "none", padding: 0,
+            fontFamily: T.fontBody,
+            color: T.inkLow, fontSize: 12,
+            fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase",
+            marginBottom: 40, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 6,
+            transition: "color 0.15s",
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = T.accent}
+          onMouseLeave={e => e.currentTarget.style.color = T.inkLow}
+        >
           ← All Restaurants
         </button>
 
-        {/* Title */}
-        <div style={{ borderBottom: `1px solid ${T.border}`, paddingBottom: 32, marginBottom: 32 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 12 }}>
-            <h1 style={{ fontFamily: T.fontDisplay, fontSize: "clamp(32px, 5vw, 52px)", fontWeight: 700, color: T.ink, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+        {/* ── Restaurant header ── */}
+        <div style={{
+          borderBottom: `1px solid ${T.border}`,
+          paddingBottom: 32, marginBottom: 32,
+        }}>
+          <div style={{
+            display: "flex", alignItems: "flex-start",
+            justifyContent: "space-between", gap: 16, marginBottom: 12,
+          }}>
+            <h1 style={{
+              fontFamily:    T.fontDisplay,
+              fontSize:      "clamp(32px, 5vw, 52px)",
+              fontWeight:    700,
+              color:         T.ink,
+              lineHeight:    1.1,
+              letterSpacing: "-0.02em",
+              margin:        0,
+            }}>
               {r.name}
             </h1>
             <VerdictBadge hypeScore={r.hypeScore} realityScore={r.realityScore} large />
           </div>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+
+          <div style={{
+            display: "flex", gap: 12,
+            alignItems: "center", flexWrap: "wrap",
+            marginBottom: 12,
+          }}>
             {[r.neighborhood, r.cuisine, r.city].filter(Boolean).map((item, i, arr) => (
               <span key={item} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 12, color: T.inkLow, letterSpacing: "0.08em", textTransform: "uppercase" }}>{item}</span>
+                <span style={{
+                  fontFamily:    T.fontBody,
+                  fontSize:      12,
+                  color:         T.inkLow,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}>
+                  {item}
+                </span>
                 {i < arr.length - 1 && <span style={{ color: T.border }}>·</span>}
               </span>
             ))}
           </div>
-          {r.address      && <p style={{ fontSize: 13, color: T.inkLow, marginBottom: 4 }}>📍 {r.address}</p>}
-          {r.openingHours && <p style={{ fontSize: 13, color: T.inkLow }}>🕐 {r.openingHours}</p>}
+
+          {r.address      && <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow, marginBottom: 4 }}>📍 {r.address}</p>}
+          {r.openingHours && <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow }}>🕐 {r.openingHours}</p>}
         </div>
 
-        {/* Scores */}
-        <div style={{ background: T.bgRaised, border: `1px solid ${T.border}`, borderRadius: 10, padding: "28px", marginBottom: 40 }}>
-          <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: T.inkLow, marginBottom: 20 }}>
+        {/* ── Community verdict ── */}
+        <div style={{
+          background:   T.bgRaised,
+          border:       `1px solid ${T.border}`,
+          borderRadius: 12,
+          padding:      "28px",
+          marginBottom: 40,
+        }}>
+          <p style={{
+            fontFamily:    T.fontBody,
+            fontSize:      10,
+            fontWeight:    700,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color:         T.inkLow,
+            marginBottom:  20,
+          }}>
             Community Verdict
           </p>
           <HypeGauge hypeScore={r.hypeScore} realityScore={r.realityScore} />
-          <p style={{ fontSize: 12, color: T.inkLow, marginTop: 16 }}>
+          <p style={{ fontFamily: T.fontBody, fontSize: 12, color: T.inkLow, marginTop: 16 }}>
             Based on {reviews.length} review{reviews.length !== 1 ? "s" : ""}
           </p>
         </div>
 
-        {/* Reviews header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-          <h2 style={{ fontFamily: T.fontDisplay, fontSize: 28, fontWeight: 700, color: T.ink }}>Community Reviews</h2>
-          <span style={{ fontSize: 13, color: T.inkLow }}>{reviews.length} total</span>
+        {/* ── Reviews section header ── */}
+        <div style={{
+          display:        "flex",
+          alignItems:     "center",
+          justifyContent: "space-between",
+          marginBottom:   24,
+          flexWrap:       "wrap",
+          gap:            12,
+        }}>
+          <h2 style={{
+            fontFamily:    T.fontDisplay,
+            fontSize:      28,
+            fontWeight:    700,
+            color:         T.ink,
+            margin:        0,
+          }}>
+            Community Reviews
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow }}>
+              {reviews.length} total
+            </span>
+            <SortControl value={sortBy} onChange={setSortBy} />
+          </div>
         </div>
 
-        {/* Success toast */}
+        {/* ── Success toast (inline) ── */}
         {showSuccess && (
-          <div style={{ background: T.worthyBg, border: `1px solid ${T.worthy}44`, borderRadius: 8, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            background:   "#4ade8010",
+            border:       `1px solid #4ade8035`,
+            borderRadius: 8,
+            padding:      "12px 18px",
+            marginBottom: 20,
+            display:      "flex",
+            alignItems:   "center",
+            gap:          10,
+          }}>
             <span style={{ color: T.worthy, fontSize: 16 }}>✦</span>
-            <span style={{ fontSize: 13, color: T.worthy, fontWeight: 600 }}>Review submitted! +10 reputation earned.</span>
+            <span style={{
+              fontFamily: T.fontBody,
+              fontSize: 13, fontWeight: 600,
+              color: T.worthy,
+            }}>
+              Review submitted! Your voice is now part of the community verdict.
+            </span>
           </div>
         )}
 
-        {/* Review form or sign-in prompt */}
+        {/* ── Review form or sign-in prompt ── */}
         {user ? (
-          <AddReviewForm restaurantId={id} user={user} onSubmitted={handleSubmitted} />
+          <AddReviewForm
+            restaurantId={id}
+            user={user}
+            onSubmitted={handleSubmitted}
+          />
         ) : (
-          <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: "28px", textAlign: "center", marginBottom: 32, background: T.bgRaised }}>
-            <p style={{ fontFamily: T.fontDisplay, fontSize: 20, color: T.ink, marginBottom: 8 }}>Have you been here?</p>
-            <p style={{ fontSize: 13, color: T.inkLow, marginBottom: 20 }}>
-              Sign in to share your experience. Account age is visible on your review — it builds community trust.
+          <div style={{
+            border:       `1px solid ${T.border}`,
+            borderRadius: 12,
+            padding:      "32px",
+            textAlign:    "center",
+            marginBottom: 32,
+            background:   T.bgRaised,
+          }}>
+            <p style={{
+              fontFamily: T.fontDisplay,
+              fontSize:   20, color: T.ink, marginBottom: 8,
+            }}>
+              Have you been here?
+            </p>
+            <p style={{
+              fontFamily: T.fontBody,
+              fontSize:   13, color: T.inkLow, marginBottom: 22,
+            }}>
+              Sign in to share your experience and earn badges for your contributions.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={() => navigate(`/login?redirect=/restaurant/${id}`)}
-                style={{ padding: "10px 24px", background: T.accent, color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button
+                onClick={() => navigate(`/login?redirect=/restaurant/${id}`)}
+                style={{
+                  padding:      "10px 26px",
+                  background:   T.accent,
+                  color:        "#0c0905",
+                  border:       "none",
+                  borderRadius: 7,
+                  fontFamily:   T.fontBody,
+                  fontSize:     13, fontWeight: 700,
+                  cursor:       "pointer",
+                  transition:   "background 0.15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = T.accentHi}
+                onMouseLeave={e => e.currentTarget.style.background = T.accent}
+              >
                 Sign In
               </button>
-              <button onClick={() => navigate(`/signup?redirect=/restaurant/${id}`)}
-                style={{ padding: "10px 24px", background: "none", color: T.inkMid, border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button
+                onClick={() => navigate(`/signup?redirect=/restaurant/${id}`)}
+                style={{
+                  padding:      "10px 26px",
+                  background:   "none",
+                  color:        T.inkMid,
+                  border:       `1px solid ${T.border}`,
+                  borderRadius: 7,
+                  fontFamily:   T.fontBody,
+                  fontSize:     13, fontWeight: 600,
+                  cursor:       "pointer",
+                }}
+              >
                 Create Account
               </button>
             </div>
           </div>
         )}
 
-        {/* Reviews list */}
-        {reviews.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <p style={{ fontFamily: T.fontDisplay, fontSize: 20, color: T.inkMid, fontStyle: "italic" }}>No reviews yet.</p>
-            <p style={{ fontSize: 13, color: T.inkLow, marginTop: 6 }}>Be the first to share your experience.</p>
+        {/* ── Reviews list ── */}
+        {sortedReviews.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "48px 0" }}>
+            <p style={{
+              fontFamily: T.fontDisplay,
+              fontSize:   22, color: T.inkMid, fontStyle: "italic", marginBottom: 8,
+            }}>
+              No reviews yet.
+            </p>
+            <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow }}>
+              Be the first to share your experience.
+            </p>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {reviews.map((review, i) => <ReviewCard key={i} review={review} />)}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {sortedReviews.map((review) => (
+              <ReviewCard
+                key={review._id}
+                review={review}
+                reviewId={review._id}
+                restaurantId={id}
+                currentUser={user}
+              />
+            ))}
           </div>
         )}
       </div>

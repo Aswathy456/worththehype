@@ -23,7 +23,7 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    setRestaurants([]);
+    setRestaurants([]);  
     setFilteredRestaurants([]);
 
     fetchRestaurantsByCity(activeCity)
