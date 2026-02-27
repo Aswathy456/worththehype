@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { CITIES } from "../services/restaurantService";
 import { T } from "../tokens";
 
-export default function NavBar() {
+export default function NavBar({ activeCity, onCityChange }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -12,69 +13,72 @@ export default function NavBar() {
   return (
     <>
       <style>{`
-        .nav-link { transition: color 0.2s; }
-        .nav-link:hover { color: ${T.ink} !important; }
+        .nav-city-btn { transition: all 0.2s; }
+        .nav-city-btn:hover { color: ${T.ink} !important; }
         .avatar-btn:hover { border-color: ${T.accent} !important; }
         .signin-btn:hover { background: ${T.accentHi} !important; }
-        .city-select:focus { outline: none; border-color: ${T.borderHi}; }
         .dropdown-item:hover { background: ${T.bgHover} !important; color: ${T.ink} !important; }
       `}</style>
 
       <nav style={{
         background: T.bg,
         borderBottom: `1px solid ${T.border}`,
-        position: "sticky", top: 0, zIndex: 100,
-        width: "100%",
+        position: "sticky", top: 0, zIndex: 100, width: "100%",
       }}>
-        {/* Thin crimson top line */}
-        <div style={{ height: 2, background: T.accent, width: "100%" }} />
+        <div style={{ height: 2, background: T.accent }} />
 
         <div style={{
-          maxWidth: 1200, margin: "0 auto",
-          padding: "0 32px",
+          maxWidth: 1200, margin: "0 auto", padding: "0 32px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           height: 60,
         }}>
           {/* Logo */}
           <Link to="/" style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={{
-              fontFamily: T.fontDisplay,
-              fontSize: 22, fontWeight: 700,
+              fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700,
               color: T.ink, letterSpacing: "-0.01em",
             }}>
               Worth<em style={{ color: T.accent, fontStyle: "italic" }}>The</em>Hype
             </span>
           </Link>
 
-          {/* Center nav */}
-          <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-            {["Kochi", "Trivandrum", "Kozhikode"].map((city, i) => (
-              <button key={city} className="nav-link" style={{
-                background: "none", border: "none",
-                fontFamily: T.fontBody,
-                fontSize: 13, fontWeight: 500,
-                letterSpacing: "0.06em", textTransform: "uppercase",
-                color: i === 0 ? T.ink : T.inkLow,
-                padding: 0,
-                borderBottom: i === 0 ? `1px solid ${T.accent}` : "1px solid transparent",
-                paddingBottom: 2,
-              }}>
-                {city}
-              </button>
-            ))}
+          {/* City tabs */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {Object.keys(CITIES).map(city => {
+              const isActive = city === activeCity;
+              return (
+                <button
+                  key={city}
+                  className="nav-city-btn"
+                  onClick={() => onCityChange(city)}
+                  style={{
+                    background: isActive ? T.bgRaised : "none",
+                    border: `1px solid ${isActive ? T.borderMid : "transparent"}`,
+                    borderRadius: 6,
+                    padding: "6px 14px",
+                    fontFamily: T.fontBody,
+                    fontSize: 13, fontWeight: isActive ? 600 : 400,
+                    letterSpacing: "0.04em",
+                    color: isActive ? T.ink : T.inkLow,
+                    cursor: "pointer",
+                    borderBottom: isActive ? `2px solid ${T.accent}` : "2px solid transparent",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {city}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Right actions */}
+          {/* Auth */}
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             {user ? (
               <div style={{ position: "relative" }}>
-                <button
-                  className="avatar-btn"
-                  onClick={() => setMenuOpen(o => !o)}
+                <button className="avatar-btn" onClick={() => setMenuOpen(o => !o)}
                   style={{
                     width: 34, height: 34, borderRadius: "50%",
-                    background: T.bgRaised,
-                    border: `1px solid ${T.borderMid}`,
+                    background: T.bgRaised, border: `1px solid ${T.borderMid}`,
                     color: T.ink, fontWeight: 600, fontSize: 12,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "border-color 0.2s",
@@ -87,8 +91,7 @@ export default function NavBar() {
                     <div style={{
                       position: "absolute", top: "calc(100% + 12px)", right: 0,
                       width: 210, background: T.bgRaised,
-                      border: `1px solid ${T.border}`,
-                      borderRadius: 10,
+                      border: `1px solid ${T.border}`, borderRadius: 10,
                       boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
                       zIndex: 20, overflow: "hidden",
                     }}>
@@ -98,9 +101,8 @@ export default function NavBar() {
                         <span style={{
                           display: "inline-block", marginTop: 8,
                           fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          color: T.accent, background: T.accentLow,
-                          padding: "3px 8px", borderRadius: 4,
+                          textTransform: "uppercase", color: T.accent,
+                          background: T.accentLow, padding: "3px 8px", borderRadius: 4,
                         }}>New Member</span>
                       </div>
                       {[["👤  Profile", "/profile"], ["📝  My Reviews", "/my-reviews"]].map(([label, path]) => (
@@ -129,15 +131,11 @@ export default function NavBar() {
                 )}
               </div>
             ) : (
-              <button className="signin-btn"
-                onClick={() => navigate("/login")}
+              <button className="signin-btn" onClick={() => navigate("/login")}
                 style={{
-                  padding: "8px 20px",
-                  background: T.accent, color: "#fff",
-                  border: "none", borderRadius: 6,
-                  fontSize: 13, fontWeight: 600,
-                  letterSpacing: "0.04em",
-                  transition: "background 0.2s",
+                  padding: "8px 20px", background: T.accent, color: "#fff",
+                  border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600,
+                  letterSpacing: "0.04em", transition: "background 0.2s",
                 }}>
                 Sign In
               </button>

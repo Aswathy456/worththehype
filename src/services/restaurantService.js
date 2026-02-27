@@ -1,72 +1,87 @@
 // restaurantService.js
-// Strategy:
-// 1. Return in-memory cache instantly if already fetched this session
-// 2. Try sessionStorage for persistence across page refreshes
-// 3. Only hit Overpass API if nothing is cached
-// This means the slow API call happens ONCE per browser session max.
+// Supports Kochi, Trivandrum, and Kozhikode
+// Each city has its own bounding box and its own cache key
 
-const CACHE_KEY = "wth_kochi_restaurants";
 const ENDPOINTS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass-api.de/api/interpreter",
 ];
 
-// Tighter bounding box = faster query (central Kochi only)
-const QUERY = `[out:json][timeout:20];node["amenity"="restaurant"]["name"](9.94,76.27,10.02,76.32);out body qt;`;
+export const CITIES = {
+  Kochi: {
+    label: "Kochi",
+    bbox: "9.94,76.27,10.02,76.32",
+    cacheKey: "wth_restaurants_kochi",
+  },
+  Trivandrum: {
+    label: "Trivandrum",
+    bbox: "8.46,76.91,8.56,77.01",
+    cacheKey: "wth_restaurants_trivandrum",
+  },
+  Kozhikode: {
+    label: "Kozhikode",
+    bbox: "11.22,75.76,11.30,75.84",
+    cacheKey: "wth_restaurants_kozhikode",
+  },
+};
 
-// In-memory cache — survives re-renders, cleared on tab close
-let memoryCache = null;
+// In-memory cache per city
+const memoryCache = {};
 
-export async function fetchKochiRestaurants() {
-  // 1. Return from memory instantly
-  if (memoryCache) {
-    console.log("✓ Serving from memory cache");
-    return memoryCache;
+function buildQuery(bbox) {
+  return `[out:json][timeout:20];node["amenity"="restaurant"]["name"](${bbox});out body qt;`;
+}
+
+export async function fetchRestaurantsByCity(cityName = "Kochi") {
+  const city = CITIES[cityName];
+  if (!city) throw new Error(`Unknown city: ${cityName}`);
+
+  // 1. Memory cache
+  if (memoryCache[cityName]) {
+    console.log(`✓ ${cityName}: from memory`);
+    return memoryCache[cityName];
   }
 
-  // 2. Return from sessionStorage (survives refresh, clears on tab close)
+  // 2. sessionStorage cache
   try {
-    const stored = sessionStorage.getItem(CACHE_KEY);
+    const stored = sessionStorage.getItem(city.cacheKey);
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed?.length > 0) {
-        memoryCache = parsed;
-        console.log("✓ Serving from sessionStorage cache");
+        memoryCache[cityName] = parsed;
+        console.log(`✓ ${cityName}: from sessionStorage`);
         return parsed;
       }
     }
   } catch (_) {}
 
   // 3. Fetch from API
-  console.log("Fetching from Overpass API...");
-  const places = await fetchFromOverpass();
+  console.log(`Fetching ${cityName} from Overpass...`);
+  const places = await fetchFromOverpass(buildQuery(city.bbox), cityName);
 
-  // Save to both caches
-  memoryCache = places;
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(places)); } catch (_) {}
+  memoryCache[cityName] = places;
+  try { sessionStorage.setItem(city.cacheKey, JSON.stringify(places)); } catch (_) {}
 
   return places;
 }
 
-async function fetchFromOverpass() {
+async function fetchFromOverpass(query, cityName) {
   let lastError;
-
   for (const endpoint of ENDPOINTS) {
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(QUERY)}`,
+        body: `data=${encodeURIComponent(query)}`,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const places = data.elements
         .filter(el => el.tags?.name)
-        .map(normalizePlace)
+        .map(el => normalizePlace(el, cityName))
         .slice(0, 40);
       if (places.length === 0) throw new Error("Empty results");
-      console.log(`✓ Got ${places.length} restaurants`);
       return places;
     } catch (err) {
       console.warn(`✗ ${endpoint}: ${err.message}`);
@@ -74,17 +89,16 @@ async function fetchFromOverpass() {
       await new Promise(r => setTimeout(r, 500));
     }
   }
-
   throw new Error("Servers busy — please refresh in a moment.");
 }
 
-function normalizePlace(osm) {
+function normalizePlace(osm, cityName) {
   const t = osm.tags || {};
   return {
     id: osm.id,
     name: t.name || t["name:en"],
-    city: "Kochi",
-    neighborhood: t["addr:suburb"] || t["addr:neighbourhood"] || t["addr:quarter"] || "Kochi",
+    city: cityName,
+    neighborhood: t["addr:suburb"] || t["addr:neighbourhood"] || t["addr:quarter"] || cityName,
     cuisine: formatCuisine(t.cuisine || t.amenity),
     address: [t["addr:housenumber"], t["addr:street"], t["addr:suburb"]].filter(Boolean).join(", ") || null,
     lat: osm.lat, lon: osm.lon,
@@ -108,9 +122,8 @@ function seededRandom(id, salt) {
   return x - Math.floor(x);
 }
 
-// Call this from a dev console to force a fresh fetch: clearRestaurantCache()
-export function clearRestaurantCache() {
-  memoryCache = null;
-  sessionStorage.removeItem(CACHE_KEY);
-  console.log("Cache cleared — next load will re-fetch from API");
+export function clearCityCache(cityName) {
+  delete memoryCache[cityName];
+  try { sessionStorage.removeItem(CITIES[cityName]?.cacheKey); } catch (_) {}
+  console.log(`Cache cleared for ${cityName}`);
 }

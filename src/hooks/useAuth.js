@@ -1,43 +1,67 @@
-import { useState } from "react";
-
-// Fake auth state — simulates a logged-out user by default
-// TO INTEGRATE FIREBASE: replace this entire hook with:
-//
-//   import { useAuthState } from "react-firebase-hooks/auth";
-//   import { auth } from "../firebase";
-//   export function useAuth() {
-//     const [user, loading] = useAuthState(auth);
-//     return { user, loading };
-//   }
-
-let _fakeUser = null; // null = logged out
-const _listeners = new Set();
-
-function setFakeUser(user) {
-  _fakeUser = user;
-  _listeners.forEach((fn) => fn(user));
-}
+import { useState, useEffect } from "react";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  sendPasswordResetEmail,
+} from "firebase/auth";
+import { ref, set, get } from "firebase/database";
+import { auth, db, googleProvider } from "../firebase";
 
 export function useAuth() {
-  const [user, setUser] = useState(_fakeUser);
+  const [user, setUser]       = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Subscribe to fake auth changes
-  useState(() => {
-    _listeners.add(setUser);
-    return () => _listeners.delete(setUser);
-  });
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const snap = await get(ref(db, `users/${firebaseUser.uid}`));
+        const profile = snap.exists() ? snap.val() : {};
+        setUser({ ...firebaseUser, ...profile });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
 
-  const login = (email) => {
-    const fakeUser = {
-      email,
-      displayName: email.split("@")[0],
-      photoURL: null,
-      accountAgeDays: 1,
-    };
-    setFakeUser(fakeUser);
+  const login = (email, password) =>
+    signInWithEmailAndPassword(auth, email, password);
+
+  const signup = async (email, password) => {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const displayName = email.split("@")[0];
+    await updateProfile(cred.user, { displayName });
+    await set(ref(db, `users/${cred.user.uid}`), {
+      email, displayName,
+      accountCreated: Date.now(),
+      reputation: "New",
+      reviewCount: 0,
+    });
+    return cred.user;
   };
 
-  const logout = () => setFakeUser(null);
+  const loginWithGoogle = async () => {
+    const cred = await signInWithPopup(auth, googleProvider);
+    const isNew = cred._tokenResponse?.isNewUser;
+    if (isNew) {
+      await set(ref(db, `users/${cred.user.uid}`), {
+        email: cred.user.email,
+        displayName: cred.user.displayName,
+        accountCreated: Date.now(),
+        reputation: "New",
+        reviewCount: 0,
+      });
+    }
+    return cred.user;
+  };
 
-  return { user, login, logout };
+  const forgotPassword = (email) => sendPasswordResetEmail(auth, email);
+  const logout = () => signOut(auth);
+
+  return { user, loading, login, signup, loginWithGoogle, logout, forgotPassword };
 }
