@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ref, onValue, query, orderByChild } from "firebase/database";
 import { db } from "../firebase";
@@ -8,8 +8,10 @@ import HypeGauge from "../components/HypeGauge";
 import VerdictBadge from "../components/VerdictBadge";
 import ReviewCard from "../components/ReviewCard";
 import { BadgeUnlockToast } from "../components/UserBadges";
+import CommunityInsight from "../components/CommunityInsight";
 import { submitReview, getUserStats, saveUserBadges } from "../services/reviewService";
 import { computeEarnedBadges, computeNewBadges } from "../services/badgeService";
+import { getRestaurantSummary, getReviewCredibility, computeWeightedRealityScore } from "../services/aiService";
 import { T } from "../tokens";
 
 // ── Reputation helpers ────────────────────────────────────────────────────
@@ -290,12 +292,84 @@ export default function RestaurantDetail() {
   const [reviewIds,    setReviewIds]    = useState([]);
   const [sortBy,       setSortBy]       = useState("top");
   const [showSuccess,  setShowSuccess]  = useState(false);
-  const [newBadges,    setNewBadges]    = useState([]); // queue of badges to toast
+  const [newBadges,    setNewBadges]    = useState([]);
 
-  // Badge toast queue management
-  const dismissBadge = (badgeId) => setNewBadges(q => q.filter(b => b.id !== badgeId));
+  // ── AI state ──────────────────────────────────────────────────────────
+  const [summaryData,      setSummaryData]      = useState(null);
+  const [summaryLoading,   setSummaryLoading]   = useState(false);
+  const [credibilityMap,   setCredibilityMap]   = useState({});
+  const [credLoadingSet,   setCredLoadingSet]   = useState(new Set());
+  const [weightedScore,    setWeightedScore]    = useState(null);
+  const [canRefresh,       setCanRefresh]       = useState(false);
+  const lastAnalysedCount  = useRef(0);
+  const summaryRunning     = useRef(false); // prevent double-fire
 
-  // Live reviews from Realtime Database
+  // ── Dismiss badge toast ───────────────────────────────────────────────
+  const dismissBadge = useCallback((badgeId) => {
+    setNewBadges(prev => prev.filter(b => b.id !== badgeId));
+  }, []);
+
+  // ── AI: run summary with explicit reviews argument (avoids stale closure) ──
+  const runSummaryAnalysis = useCallback(async (reviewsToAnalyse) => {
+    if (!reviewsToAnalyse || reviewsToAnalyse.length < 2) return;
+    if (summaryRunning.current) return;
+    summaryRunning.current = true;
+    setSummaryLoading(true);
+    setCanRefresh(false);
+    try {
+      const data = await getRestaurantSummary(id, reviewsToAnalyse);
+      setSummaryData(data);
+      lastAnalysedCount.current = reviewsToAnalyse.length;
+    } catch { /* non-fatal */ }
+    setSummaryLoading(false);
+    summaryRunning.current = false;
+  }, [id]);
+
+  // ── AI: trigger summary when reviews load/change ──────────────────────
+  // KEY FIX: pass `reviews` directly as argument so we never read stale state
+  useEffect(() => {
+    if (reviews.length < 2) return;
+
+    // If we've already run once and new reviews arrived, show refresh button
+    if (lastAnalysedCount.current > 0 && reviews.length !== lastAnalysedCount.current) {
+      setCanRefresh(true);
+      return;
+    }
+
+    // First load — run immediately, passing current reviews explicitly
+    if (lastAnalysedCount.current === 0) {
+      runSummaryAnalysis(reviews);
+    }
+  }, [reviews, runSummaryAnalysis]);
+
+  // ── AI: analyse credibility of each review ────────────────────────────
+  useEffect(() => {
+    if (reviews.length === 0) return;
+    reviews.forEach((review, i) => {
+      const rid = reviewIds[i];
+      if (!rid || credibilityMap[rid] || credLoadingSet.has(rid)) return;
+
+      setCredLoadingSet(prev => new Set([...prev, rid]));
+      getReviewCredibility(id, rid, review.text)
+        .then(result => {
+          setCredibilityMap(prev => ({ ...prev, [rid]: result }));
+          setCredLoadingSet(prev => { const s = new Set(prev); s.delete(rid); return s; });
+        })
+        .catch(() => {
+          setCredLoadingSet(prev => { const s = new Set(prev); s.delete(rid); return s; });
+        });
+    });
+  }, [reviews, reviewIds]);
+
+  // ── Recompute weighted score when credibility map updates ─────────────
+  useEffect(() => {
+    if (reviews.length === 0) return;
+    const reviewsWithIds = reviews.map((r, i) => ({ ...r, _id: reviewIds[i] }));
+    const score = computeWeightedRealityScore(reviewsWithIds, credibilityMap);
+    setWeightedScore(score);
+  }, [credibilityMap, reviews, reviewIds]);
+
+  // ── Live reviews from Realtime Database ──────────────────────────────
   useEffect(() => {
     const reviewsRef = query(ref(db, `reviews/${id}`), orderByChild("createdAt"));
     const unsub = onValue(reviewsRef, (snap) => {
@@ -306,7 +380,6 @@ export default function RestaurantDetail() {
           ids.push(child.key);
           list.push(child.val());
         });
-        // Reverse so newest first by default
         setReviewIds(ids.reverse());
         setReviews(list.reverse());
       } else {
@@ -317,12 +390,11 @@ export default function RestaurantDetail() {
     return () => unsub();
   }, [id]);
 
-  // Sort reviews
+  // ── Sort reviews ──────────────────────────────────────────────────────
   const sortedReviews = [...reviews].map((r, i) => ({ ...r, _id: reviewIds[i] })).sort((a, b) => {
     if (sortBy === "top")           return (b.score ?? 0) - (a.score ?? 0);
-    if (sortBy === "new")           return (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0);
+    if (sortBy === "new")           return (b.createdAt ?? 0) - (a.createdAt ?? 0);
     if (sortBy === "controversial") {
-      // High downvotes + high upvotes = controversial
       const controversyA = Math.min(a.upvotes ?? 0, a.downvotes ?? 0);
       const controversyB = Math.min(b.upvotes ?? 0, b.downvotes ?? 0);
       return controversyB - controversyA;
@@ -330,17 +402,17 @@ export default function RestaurantDetail() {
     return 0;
   });
 
-  // After submitting a review, check for new badges
+  // ── After submitting a review, check for new badges ───────────────────
   const handleSubmitted = async () => {
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 4000);
 
     if (user) {
       try {
-        const stats        = await getUserStats(user.uid);
-        const earned       = computeEarnedBadges(stats);
-        const existing     = stats?.badges ?? [];
-        const unlocked     = computeNewBadges(stats, existing);
+        const stats    = await getUserStats(user.uid);
+        const earned   = computeEarnedBadges(stats);
+        const existing = stats?.badges ?? [];
+        const unlocked = computeNewBadges(stats, existing);
         if (unlocked.length > 0) {
           setNewBadges(unlocked);
           await saveUserBadges(user.uid, earned.map(b => b.id));
@@ -453,7 +525,51 @@ export default function RestaurantDetail() {
             ))}
           </div>
 
-          {r.address      && <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow, marginBottom: 4 }}>📍 {r.address}</p>}
+          {/* Address row + Google Maps button — button always shows */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+            {r.address && (
+              <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow, margin: 0 }}>
+                📍 {r.address}
+              </p>
+            )}
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                [r.name, r.address, r.neighborhood, r.city].filter(Boolean).join(", ")
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:        "inline-flex",
+                alignItems:     "center",
+                gap:            5,
+                padding:        "4px 10px",
+                background:     "rgba(66,133,244,0.1)",
+                border:         "1px solid rgba(66,133,244,0.25)",
+                borderRadius:   6,
+                fontFamily:     T.fontBody,
+                fontSize:       11,
+                fontWeight:     600,
+                color:          "#4285F4",
+                letterSpacing:  "0.04em",
+                textDecoration: "none",
+                transition:     "all 0.15s",
+                whiteSpace:     "nowrap",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background  = "rgba(66,133,244,0.18)";
+                e.currentTarget.style.borderColor = "rgba(66,133,244,0.5)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background  = "rgba(66,133,244,0.1)";
+                e.currentTarget.style.borderColor = "rgba(66,133,244,0.25)";
+              }}
+            >
+              <svg width="11" height="13" viewBox="0 0 11 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5.5 0C2.46 0 0 2.46 0 5.5c0 3.85 5.5 7.5 5.5 7.5S11 9.35 11 5.5C11 2.46 8.54 0 5.5 0zm0 7.5C4.12 7.5 3 6.38 3 5s1.12-2.5 2.5-2.5S8 3.62 8 5s-1.12 2.5-2.5 2.5z" fill="#4285F4"/>
+              </svg>
+              Open in Maps
+            </a>
+          </div>
           {r.openingHours && <p style={{ fontFamily: T.fontBody, fontSize: 13, color: T.inkLow }}>🕐 {r.openingHours}</p>}
         </div>
 
@@ -481,6 +597,17 @@ export default function RestaurantDetail() {
             Based on {reviews.length} review{reviews.length !== 1 ? "s" : ""}
           </p>
         </div>
+
+        {/* ── AI Community Insight ── */}
+        <CommunityInsight
+          summaryData={summaryData}
+          loading={summaryLoading}
+          weightedScore={weightedScore}
+          rawScore={r.realityScore}
+          reviewCount={reviews.length}
+          onRefresh={() => runSummaryAnalysis(reviews)}
+          canRefresh={canRefresh}
+        />
 
         {/* ── Reviews section header ── */}
         <div style={{
@@ -619,6 +746,8 @@ export default function RestaurantDetail() {
                 reviewId={review._id}
                 restaurantId={id}
                 currentUser={user}
+                credibility={credibilityMap[review._id] ?? null}
+                credibilityLoading={credLoadingSet.has(review._id)}
               />
             ))}
           </div>

@@ -3,6 +3,7 @@ import { T } from "../tokens";
 import { voteOnReview, getUserVote, getUserStats } from "../services/reviewService";
 import { computeEarnedBadges } from "../services/badgeService";
 import { BadgeRow } from "./UserBadges";
+import CredibilityTag from "./CredibilityTag";
 
 // ── Reputation colours ────────────────────────────────────────────────────
 const REP = {
@@ -106,7 +107,7 @@ function VoteButton({ direction, active, count, onClick, disabled }) {
 }
 
 // ── Main ReviewCard ───────────────────────────────────────────────────────
-export default function ReviewCard({ review, reviewId, restaurantId, currentUser }) {
+export default function ReviewCard({ review, reviewId, restaurantId, currentUser, credibility, credibilityLoading }) {
   const {
     uid, displayName, accountCreated,
     hypeGiven, realityGiven, text,
@@ -393,36 +394,39 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
             </div>
           </div>
 
-          {/* Delta pill */}
-          <div style={{
-            display:      "inline-flex",
-            alignItems:   "center",
-            gap:          6,
-            background:   deltaPos ? "#4ade8010" : "#f8717110",
-            border:       `1px solid ${deltaPos ? "#4ade8030" : "#f8717130"}`,
-            borderRadius: 5,
-            padding:      "3px 10px",
-            marginBottom: 12,
-          }}>
-            <span style={{
-              fontFamily: T.fontMono,
-              fontSize:   11,
-              fontWeight: 700,
-              color:      deltaPos ? T.worthy : T.hype,
+          {/* Delta pill + credibility tag row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <div style={{
+              display:      "inline-flex",
+              alignItems:   "center",
+              gap:          6,
+              background:   deltaPos ? "#4ade8010" : "#f8717110",
+              border:       `1px solid ${deltaPos ? "#4ade8030" : "#f8717130"}`,
+              borderRadius: 5,
+              padding:      "3px 10px",
             }}>
-              {deltaPos ? "+" : ""}{delta.toFixed(1)}
-            </span>
-            <span style={{
-              fontFamily:    T.fontBody,
-              fontSize:      9,
-              fontWeight:    600,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color:         deltaPos ? T.worthy : T.hype,
-              opacity:       0.8,
-            }}>
-              {deltaPos ? "Worth It" : "Overhyped"}
-            </span>
+              <span style={{
+                fontFamily: T.fontMono,
+                fontSize:   11,
+                fontWeight: 700,
+                color:      deltaPos ? T.worthy : T.hype,
+              }}>
+                {deltaPos ? "+" : ""}{delta.toFixed(1)}
+              </span>
+              <span style={{
+                fontFamily:    T.fontBody,
+                fontSize:      9,
+                fontWeight:    600,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color:         deltaPos ? T.worthy : T.hype,
+                opacity:       0.8,
+              }}>
+                {deltaPos ? "Worth It" : "Overhyped"}
+              </span>
+            </div>
+
+            <CredibilityTag credibility={credibility} loading={credibilityLoading} />
           </div>
 
           {/* Review text */}
