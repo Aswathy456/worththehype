@@ -1,26 +1,64 @@
-WorthTheHype
+# Worth The Hype 🎯
 
-WorthTheHype is a credibility-first, city-based restaurant discovery platform built for Kerala.
+## Basic Details
 
-Instead of showing what’s popular, it compares online hype with real user experience and surfaces the gap — called the Delta.
+**Team Name:** BarelyRight  
 
-🔍 How It Works
+**Team Members:**  
+- **Aleena Johny** – (College)  
+- **Aswathy K A** – (College)  
 
-Hype Score – online buzz
+**Hosted Project Link:**  
+https://worththehype001.vercel.app/
 
-Reality Score – first-hand community reviews
+---
 
-Delta – difference between perception and reality
+## Project Description
 
-Positive delta → worth visiting
-Negative delta → likely overhyped
+WorthTheHype is a city-based restaurant discovery platform that compares online hype with real user experiences. It helps users identify whether a restaurant is genuinely worth visiting or simply overhyped.
 
-🧠 AI (No-BS)
+---
 
-Evaluates review text for specificity and tone
+## The Problem Statement
 
-Tags reviews as Likely Genuine or Low Confidence
+Food discovery platforms often prioritize popularity and promotions, leading users to visit overhyped restaurants with poor real-world experiences. Fake reviews, bots, and promotional content further reduce trust in existing systems.
 
-Generates a neutral community summary per restaurant
+---
 
-AI never removes reviews — it only affects influence
+## The Solution
+
+WorthTheHype introduces a credibility-first approach by separating hype from reality. It uses community-driven reviews, visible account credibility, and AI-assisted review analysis to surface honest dining experiences instead of promotional noise.
+
+---
+
+## Technical Details
+
+### Technologies / Components Used
+
+#### For Software:
+- Languages: JavaScript  
+- Frameworks: React, Vite  
+- Libraries: React Router DOM  
+- Tools: VS Code, Git, GitHub, Vercel  
+
+#### For Hardware:
+- Not applicable (Web-based project)
+
+---
+
+## Features
+
+- Dual-score system: Hype Score vs Reality Score
+- Delta-based verdict (Worth the Hype / Overhyped)
+- City-based restaurant discovery (Kochi)
+- AI-assisted review credibility tagging
+- Reputation-aware user reviews
+- Clean, responsive UI
+
+---
+
+## Implementation
+
+### Installation
+```bash
+npm install
