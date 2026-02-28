@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { T } from "../tokens";
 import { voteOnReview, getUserVote, getUserStats } from "../services/reviewService";
 import { computeEarnedBadges } from "../services/badgeService";
@@ -108,6 +109,8 @@ function VoteButton({ direction, active, count, onClick, disabled }) {
 
 // ── Main ReviewCard ───────────────────────────────────────────────────────
 export default function ReviewCard({ review, reviewId, restaurantId, currentUser, credibility, credibilityLoading }) {
+  const navigate = useNavigate();
+
   const {
     uid, displayName, accountCreated,
     hypeGiven, realityGiven, text,
@@ -126,23 +129,21 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
   // ── Local vote state ──────────────────────────────────────────────────
   const [localUpvotes,   setLocalUpvotes]   = useState(upvotes);
   const [localDownvotes, setLocalDownvotes] = useState(downvotes);
-  const [myVote,         setMyVote]         = useState(0); // 1 | -1 | 0
+  const [myVote,         setMyVote]         = useState(0);
   const [voting,         setVoting]         = useState(false);
 
   // ── Author badges ─────────────────────────────────────────────────────
   const [authorBadges, setAuthorBadges] = useState([]);
 
   // ── Collapse if heavily downvoted ─────────────────────────────────────
-  const netScore      = localUpvotes - localDownvotes;
+  const netScore        = localUpvotes - localDownvotes;
   const isControversial = netScore <= -3;
-  const [collapsed,   setCollapsed]   = useState(false);
+  const [collapsed,     setCollapsed]   = useState(false);
 
-  // Sync collapse when score drops
   useEffect(() => {
     if (isControversial) setCollapsed(true);
   }, [isControversial]);
 
-  // Fetch user's existing vote + author stats on mount
   useEffect(() => {
     let alive = true;
     async function load() {
@@ -163,17 +164,12 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
   async function handleVote(value) {
     if (!currentUser || voting || !reviewId) return;
     setVoting(true);
-
     const prev = myVote;
-
-    // Optimistic UI update
     if (prev === value) {
-      // Toggle off
       setMyVote(0);
       if (value ===  1) setLocalUpvotes(v => v - 1);
       if (value === -1) setLocalDownvotes(v => v - 1);
     } else {
-      // Switch or fresh vote
       setMyVote(value);
       if (value ===  1) {
         setLocalUpvotes(v => v + 1);
@@ -183,11 +179,9 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
         if (prev === 1) setLocalUpvotes(v => v - 1);
       }
     }
-
     try {
       await voteOnReview(restaurantId, reviewId, currentUser.uid, value);
     } catch {
-      // Revert on failure
       setMyVote(prev);
       setLocalUpvotes(upvotes);
       setLocalDownvotes(downvotes);
@@ -195,23 +189,41 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
     setVoting(false);
   }
 
+  // ── Navigate to user profile ──────────────────────────────────────────
+  function goToProfile(e) {
+    e.stopPropagation();
+    if (uid) navigate(`/user/${uid}`);
+  }
+
   // ── Collapsed state ───────────────────────────────────────────────────
   if (collapsed) {
     return (
       <div style={{
-        border:       `1px solid ${T.border}`,
-        borderRadius: 8,
-        padding:      "12px 16px",
-        background:   T.bgRaised,
-        display:      "flex",
-        alignItems:   "center",
+        border:         `1px solid ${T.border}`,
+        borderRadius:   8,
+        padding:        "12px 16px",
+        background:     T.bgRaised,
+        display:        "flex",
+        alignItems:     "center",
         justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 11, color: T.inkLow, fontFamily: T.fontBody }}>
             ▼ Collapsed — low score ({netScore})
           </span>
-          <span style={{ fontSize: 11, color: T.inkMid, fontFamily: T.fontBody }}>
+          {/* Clickable username even in collapsed state */}
+          <span
+            onClick={goToProfile}
+            style={{
+              fontSize:   11,
+              color:      uid ? T.inkMid : T.inkLow,
+              fontFamily: T.fontBody,
+              cursor:     uid ? "pointer" : "default",
+              transition: "color 0.15s",
+            }}
+            onMouseEnter={e => { if (uid) e.currentTarget.style.color = T.accent; }}
+            onMouseLeave={e => { e.currentTarget.style.color = T.inkMid; }}
+          >
             u/{displayName}
           </span>
         </div>
@@ -248,7 +260,6 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
       overflow:     "hidden",
       transition:   "border-color 0.2s",
     }}>
-      {/* Left vote rail + content */}
       <div style={{ display: "flex" }}>
 
         {/* ── Vote rail ── */}
@@ -269,21 +280,18 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
             onClick={() => handleVote(1)}
             disabled={!currentUser || voting}
           />
-
-          {/* Net score */}
           <span style={{
-            fontFamily:  T.fontMono,
-            fontSize:    13,
-            fontWeight:  700,
-            color:       netScore > 0 ? T.accent : netScore < 0 ? T.hype : T.inkLow,
-            lineHeight:  1,
-            minWidth:    24,
-            textAlign:   "center",
-            padding:     "2px 0",
+            fontFamily: T.fontMono,
+            fontSize:   13,
+            fontWeight: 700,
+            color:      netScore > 0 ? T.accent : netScore < 0 ? T.hype : T.inkLow,
+            lineHeight: 1,
+            minWidth:   24,
+            textAlign:  "center",
+            padding:    "2px 0",
           }}>
             {netScore > 0 ? `+${netScore}` : netScore}
           </span>
-
           <VoteButton
             direction="down"
             active={myVote === -1}
@@ -306,34 +314,62 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
           }}>
             {/* Avatar + user info */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{
-                width:          34,
-                height:         34,
-                borderRadius:   "50%",
-                background:     avatarGradient(displayName),
-                border:         `1.5px solid ${T.borderMid}`,
-                display:        "flex",
-                alignItems:     "center",
-                justifyContent: "center",
-                fontFamily:     T.fontDisplay,
-                fontSize:       13,
-                fontWeight:     700,
-                color:          "#f2ede6",
-                flexShrink:     0,
-              }}>
+
+              {/* Avatar — clickable */}
+              <div
+                onClick={goToProfile}
+                style={{
+                  width:          34,
+                  height:         34,
+                  borderRadius:   "50%",
+                  background:     avatarGradient(displayName),
+                  border:         `1.5px solid ${T.borderMid}`,
+                  display:        "flex",
+                  alignItems:     "center",
+                  justifyContent: "center",
+                  fontFamily:     T.fontDisplay,
+                  fontSize:       13,
+                  fontWeight:     700,
+                  color:          "#f2ede6",
+                  flexShrink:     0,
+                  cursor:         uid ? "pointer" : "default",
+                  transition:     "border-color 0.15s, transform 0.15s",
+                }}
+                onMouseEnter={e => {
+                  if (uid) {
+                    e.currentTarget.style.borderColor = T.accent;
+                    e.currentTarget.style.transform   = "scale(1.08)";
+                  }
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = T.borderMid;
+                  e.currentTarget.style.transform   = "scale(1)";
+                }}
+              >
                 {(displayName || "?")[0].toUpperCase()}
               </div>
 
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{
-                    fontFamily: T.fontBody,
-                    fontSize:   13,
-                    fontWeight: 700,
-                    color:      T.ink,
-                  }}>
+
+                  {/* ── Clickable username ── */}
+                  <span
+                    onClick={goToProfile}
+                    style={{
+                      fontFamily: T.fontBody,
+                      fontSize:   13,
+                      fontWeight: 700,
+                      color:      T.ink,
+                      cursor:     uid ? "pointer" : "default",
+                      transition: "color 0.15s",
+                      textDecoration: "none",
+                    }}
+                    onMouseEnter={e => { if (uid) e.currentTarget.style.color = T.accent; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = T.ink; }}
+                  >
                     u/{displayName}
                   </span>
+
                   <span style={{
                     fontFamily:    T.fontBody,
                     fontSize:      9,
@@ -347,11 +383,12 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
                   }}>
                     {reputation}
                   </span>
-                  {/* Author's top badges */}
+
                   {authorBadges.length > 0 && (
                     <BadgeRow badges={authorBadges} max={3} />
                   )}
                 </div>
+
                 <p style={{
                   fontFamily: T.fontBody,
                   fontSize:   11,
@@ -394,7 +431,7 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
             </div>
           </div>
 
-          {/* Delta pill + credibility tag row */}
+          {/* Delta pill + credibility tag */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
             <div style={{
               display:      "inline-flex",
@@ -443,7 +480,6 @@ export default function ReviewCard({ review, reviewId, restaurantId, currentUser
             "{text}"
           </p>
 
-          {/* Sign-in nudge if not logged in */}
           {!currentUser && (
             <p style={{
               fontFamily: T.fontBody,

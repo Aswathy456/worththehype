@@ -5,6 +5,8 @@ import RestaurantDetail from "./pages/RestaurantDetail";
 import AddReview from "./pages/AddReview";
 import { Login, Signup, ForgotPassword } from "./pages/AuthPages";
 import Profile from "./pages/Profile";
+import PublicProfile from "./pages/PublicProfile";
+
 function App() {
   return (
     <BrowserRouter>
@@ -17,6 +19,7 @@ function App() {
           <Route path="/restaurant/:id"   element={<RestaurantDetail />} />
           <Route path="/restaurant/:id/review" element={<AddReview />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/user/:userId" element={<PublicProfile />} />
         </Routes>
       </RestaurantProvider>
     </BrowserRouter>
