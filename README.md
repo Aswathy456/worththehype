@@ -17,7 +17,7 @@ Instead of showing what’s popular, it compares online hype with real user expe
 
 ---
 
-## 🧠 AI (No-BS)
+## 🧠 AI 
 
 - Evaluates review text for specificity and tone  
 - Tags reviews as **Likely Genuine** or **Low Confidence**  
