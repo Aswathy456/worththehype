@@ -1,29 +1,3 @@
-WorthTheHype
-
-WorthTheHype is a credibility-first, city-based restaurant discovery platform built for Kochi, Kerala.
-
-Instead of showing what’s popular, it compares online hype with real user experience and surfaces the gap — called the Delta.
-
-🔍 How It Works
-
-Hype Score – online buzz
-
-Reality Score – first-hand community reviews
-
-Delta – difference between perception and reality
-
-Positive delta → worth visiting
-Negative delta → likely overhyped
-
-🧠 AI (No-BS)
-
-Evaluates review text for specificity and tone
-
-Tags reviews as Likely Genuine or Low Confidence
-
-Generates a neutral community summary per restaurant
-
-AI never removes reviews — it only affects influence
 **Worth The Hype 🎯**
 
 **Basic Details**
@@ -87,15 +61,15 @@ npm run dev
 
 **Project Documentation**
 
-![Home Feed](screenshots/home.png)
+![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.001.png)
 
 Kochi dashboard displaying restaurants ranked by Hype vs Reality scores with search, filters, and trending highlights.
 
-![Restaurant Detail](screenshots/restaurant.png)
+![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.002.png)
 
 Restaurant detail page showing community reviews with reputation tiers, voting, AI confidence tags, and separate Hype/Reality ratings.
 
-![Community Verdict](screenshots/verdict.png)
+![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.003.png)
 
 Final verdict section summarizing aggregated scores with delta classification and AI-weighted adjustment for review credibility.
 
@@ -103,8 +77,20 @@ Final verdict section summarizing aggregated scores with delta classification an
 
 **Diagrams**
 
-**System Architecture:**
-![System Architecture](screenshots/architecture.png)
+![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.004.png)**System Architecture:**
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -121,7 +107,7 @@ Selects city (Kochi)
 
 Browses restaurant list (Hype vs Reality)
 
-'        `↓
+`        `↓
 
 Searches / filters restaurants
 
