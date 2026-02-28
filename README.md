@@ -1,6 +1,6 @@
 WorthTheHype
 
-WorthTheHype is a credibility-first, city-based restaurant discovery platform built for Kochi, Kerala.
+WorthTheHype is a credibility-first, city-based restaurant discovery platform built for Kerala.
 
 Instead of showing what’s popular, it compares online hype with real user experience and surfaces the gap — called the Delta.
 
