@@ -1,213 +1,193 @@
-**Worth The Hype 🎯**
+# WorthTheHype 🎯
 
-**Basic Details**
+WorthTheHype is a credibility-first, city-based restaurant discovery platform built for Kochi, Kerala.
 
-**Team Name:** BarelyRight\
+Instead of showing what’s popular, it compares online hype with real user experience and surfaces the gap — called the **Delta**.
+
+---
+
+## 🔍 How It Works
+
+- **Hype Score** – Online buzz  
+- **Reality Score** – First-hand community reviews  
+- **Delta** – Difference between perception and reality  
+
+**Positive delta** → Worth visiting  
+**Negative delta** → Likely overhyped  
+
+---
+
+## 🧠 AI (No-BS)
+
+- Evaluates review text for specificity and tone  
+- Tags reviews as **Likely Genuine** or **Low Confidence**  
+- Generates a neutral community summary per restaurant  
+- AI never removes reviews — it only affects influence  
+
+---
+
+## Basic Details
+
+**Team Name:** BarelyRight  
+
 **Team Members:**
+- Aleena Johny – (College)  
+- Aswathy K A – (College)  
 
-- **Aleena Johny** – (College)
-- **Aswathy K A** – (College)
+**Hosted Project Link:**  
+https://worththehype001.vercel.app/
 
-**Hosted Project Link:**\
-<https://worththehype001.vercel.app/>
+---
 
-**Project Description**
+## Project Description
 
 WorthTheHype is a city-based restaurant discovery platform that compares online hype with real user experiences. It helps users identify whether a restaurant is genuinely worth visiting or simply overhyped.
 
-**The Problem Statement**
+---
+
+## The Problem Statement
 
 Food discovery platforms often prioritize popularity and promotions, leading users to visit overhyped restaurants with poor real-world experiences. Fake reviews, bots, and promotional content further reduce trust in existing systems.
 
-**The Solution**
+---
+
+## The Solution
 
 WorthTheHype introduces a credibility-first approach by separating hype from reality. It uses community-driven reviews, visible account credibility, and AI-assisted review analysis to surface honest dining experiences instead of promotional noise.
 
-**Technical Details**
+---
 
-**Technologies / Components Used**
+## Technical Details
 
-**For Software:**
+### Technologies / Components Used
 
-- **Languages used:** JavaScript
-- **Frameworks used:** React, Vite
-- **Libraries used:** React Router DOM
-- **Tools used:** VS Code, Git, GitHub, Vercel
+#### For Software
+- **Languages:** JavaScript  
+- **Frameworks:** React, Vite  
+- **Libraries:** React Router DOM  
+- **Tools:** VS Code, Git, GitHub, Vercel  
 
-**For Hardware:**
-
+#### For Hardware
 - Not applicable (Web-based project)
------
-**Features**
+
+---
+
+## Features
 
 - Dual-score system: **Hype Score vs Reality Score**
-- Delta-based verdict (Worth the Hype / Overhyped)
+- Delta-based verdict (**Worth the Hype / Overhyped**)
 - City-based restaurant discovery (Kochi)
 - AI-assisted review credibility tagging
 - Reputation-aware user reviews
 - Clean, responsive UI
 
-**Implementation**
+---
 
-**For Software:**
+## Implementation
 
-**Installation**
-
+### Installation
+```bash
 npm install
+```
 
-**Run**
-
+### Run
+```bash
 npm run dev
+```
 
-**Project Documentation**
+---
 
-![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.001.png)
+## Project Documentation
+
+### Home Feed
+
+![Home Feed](screenshots/home.png)
 
 Kochi dashboard displaying restaurants ranked by Hype vs Reality scores with search, filters, and trending highlights.
 
-![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.002.png)
+
+
+---
+![Restaurant Detail](screenshots/restaurant.png)
 
 Restaurant detail page showing community reviews with reputation tiers, voting, AI confidence tags, and separate Hype/Reality ratings.
 
-![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.003.png)
+---
+
+![Community Verdict](screenshots/verdict.png)
 
 Final verdict section summarizing aggregated scores with delta classification and AI-weighted adjustment for review credibility.
 
+---
 
+## Diagrams
 
-**Diagrams**
+### System Architecture
 
-![](Aspose.Words.6fb62e35-d7b2-417e-a572-a6e4077a2553.004.png)**System Architecture:**
+![System Architecture](screenshots/architecture.png)
 
+---
 
+## Application Workflow
 
+1. User opens application  
+2. Selects city (Kochi)  
+3. Browses restaurant list (Hype vs Reality)  
+4. Searches / filters restaurants  
+5. Views restaurant details  
+6. Reads community reviews  
+7. AI evaluates review credibility  
+8. Community votes influence scores  
+9. User logs in (optional)  
+10. Submits review (Hype + Reality)  
+11. Scores update and verdict recalculates  
 
+---
 
+## Additional Documentation
 
+### API Documentation
 
-
-
-
-
-
-
-
-
-
-
-**Application Workflow:**
-
-User opens application
-
-`        `↓
-
-Selects city (Kochi)
-
-`        `↓
-
-Browses restaurant list (Hype vs Reality)
-
-`        `↓
-
-Searches / filters restaurants
-
-`        `↓
-
-Views restaurant details
-
-`        `↓
-
-Reads community reviews
-
-`        `↓
-
-AI evaluates review credibility
-
-`        `↓
-
-Community votes influence scores
-
-`        `↓
-
-User logs in (optional)
-
-`        `↓
-
-Submits review (Hype + Reality)
-
-`        `↓
-
-Scores update and verdict recalculates
-
-**Additional Documentation**
-
-**For Web Projects with Backend:**
-
-**API Documentation**
-
-**Base URLs**
+#### Base URLs
 
 **Overpass API (Restaurant Data)**
-
-- <https://overpass.kumi.systems/api/interpreter>
-- <https://maps.mail.ru/osm/tools/overpass/api/interpreter>
-- <https://overpass-api.de/api/interpreter>
+- https://overpass.kumi.systems/api/interpreter  
+- https://maps.mail.ru/osm/tools/overpass/api/interpreter  
+- https://overpass-api.de/api/interpreter  
 
 **Anthropic API (AI Review Analysis)**
+- https://api.anthropic.com/v1/messages  
 
-- <https://api.anthropic.com/v1/messages>
+---
 
-**Endpoints Used**
+### Endpoints Used
 
-**1️⃣ Overpass API**
+#### Overpass API
 
-**Endpoint:**\
-POST /api/interpreter
+- **Endpoint:** `POST /api/interpreter`
+- **Description:** Fetches restaurant data within a predefined city bounding box (Kochi) using Overpass QL queries.
+- **Request Parameter:**
+  - `query` (string) — Overpass QL query containing geographic bounding box and amenity filters.
+- **Response:**
+  - Restaurant name  
+  - Latitude & longitude  
+  - Tags (cuisine, locality, amenity type)  
 
-**Description:**\
-Fetches restaurant data within a predefined city bounding box (Kochi) using Overpass QL queries.
+---
 
-**Request Parameter:**
+#### Anthropic API
 
-- query (string) — Overpass QL query containing geographic bounding box and amenity filters.
+- **Endpoint:** `POST /v1/messages`
+- **Model Used:** `claude-sonnet-4-20250514`
+- **Description:**
+  - Generates a neutral community summary  
+  - Classifies review credibility (Likely Genuine / Low Confidence / Promotional)
 
-**Response:**\
-Returns structured JSON containing:
-
-- Restaurant name
-- Latitude & longitude
-- Tags (cuisine, locality, amenity type)
-
-**2️⃣ Anthropic API**
-
-**Endpoint:**\
-POST /v1/messages
-
-**Model Used:**\
-claude-sonnet-4-20250514
-
-**Description:**\
-Analyzes review text to:
-
-- Generate a neutral community summary
-- Classify review credibility (Likely Genuine / Low Confidence / Promotional)
-
-**Request Body Example:**
-
-{\
-`  `"model": "claude-sonnet-4-20250514",\
-`  `"messages": [\
-`    `{ "role": "user", "content": "Review text or aggregated reviews" }\
-`  `]\
+**Request Body Example**
+```json
+{
+  "model": "claude-sonnet-4-20250514",
+  "messages": [
+    { "role": "user", "content": "Review text or aggregated reviews" }
+  ]
 }
-
-**Response (Simplified):**
-
-{\
-`  `"content": [\
-`    `{\
-`      `"text": "AI-generated summary or credibility label"\
-`    `}\
-`  `]\
-}
-
